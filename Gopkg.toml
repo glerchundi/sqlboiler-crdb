@@ -27,7 +27,7 @@
 
 [[constraint]]
   name = "github.com/volatiletech/sqlboiler"
-  branch = "v3"
+  revision = "843d9811b79d03e1788294e4a7d93ded5637afe7" # v3
 
 [prune]
   go-tests = true

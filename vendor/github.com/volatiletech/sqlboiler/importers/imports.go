@@ -185,15 +185,18 @@ func NewDefaultImports() Collection {
 	col.Singleton = Map{
 		"boil_queries": {
 			ThirdParty: List{
-				`"github.com/volatiletech/sqlboiler/boil"`,
 				`"github.com/volatiletech/sqlboiler/drivers"`,
 				`"github.com/volatiletech/sqlboiler/queries"`,
 				`"github.com/volatiletech/sqlboiler/queries/qm"`,
 			},
 		},
 		"boil_types": {
+			Standard: List{
+				`"strconv"`,
+			},
 			ThirdParty: List{
 				`"github.com/pkg/errors"`,
+				`"github.com/volatiletech/sqlboiler/boil"`,
 				`"github.com/volatiletech/sqlboiler/strmangle"`,
 			},
 		},

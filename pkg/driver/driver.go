@@ -172,24 +172,42 @@ func (c *CockroachDBDriver) TableNames(schema string, whitelist, blacklist []str
 // from the database information_schema.columns. It retrieves the column names
 // and column types and returns those as a []Column after TranslateColumnType()
 // converts the SQL types to Go types, for example: "varchar" to "string"
-func (c *CockroachDBDriver) Columns(schema, tableName string) ([]drivers.Column, error) {
+func (c *CockroachDBDriver) Columns(schema, tableName string, whitelist, blacklist []string) ([]drivers.Column, error) {
 	var columns []drivers.Column
 
-	rows, err := c.conn.Query(`
+	args := []interface{}{schema, tableName}
+
+	query := `
 		select
 		distinct c.column_name,
 		c.data_type,
 		c.column_default,
-		(case when c.is_nullable = 'NO' then FALSE
-			else TRUE end) as is_nullable,
-		(case when kcu.constraint_name is not null then TRUE
-			else False END) as is_unique
+		(case when c.is_nullable = 'NO' then FALSE else TRUE end) as is_nullable,
+		(case when kcu.constraint_name is not null then TRUE else False END) as is_unique
 		from information_schema.columns as c
 			left join information_schema.key_column_usage kcu on c.table_name = kcu.table_name
 				and c.table_schema = kcu.table_schema and c.column_name = kcu.column_name
-		where c.table_schema = $1 and c.table_name = $2;
-	`, schema, tableName)
+		where c.table_schema = $1 and c.table_name = $2;`
 
+	if len(whitelist) > 0 {
+		cols := drivers.ColumnsFromList(whitelist, tableName)
+		if len(cols) > 0 {
+			query += fmt.Sprintf(" and c.column_name in (%s)", strmangle.Placeholders(true, len(cols), 3, 1))
+			for _, w := range cols {
+				args = append(args, w)
+			}
+		}
+	} else if len(blacklist) > 0 {
+		cols := drivers.ColumnsFromList(blacklist, tableName)
+		if len(cols) > 0 {
+			query += fmt.Sprintf(" and c.column_name not in (%s)", strmangle.Placeholders(true, len(cols), 3, 1))
+			for _, w := range cols {
+				args = append(args, w)
+			}
+		}
+	}
+
+	rows, err := c.conn.Query(query, args...)
 	if err != nil {
 		return nil, err
 	}
