@@ -1,4 +1,4 @@
-//go:generate go-bindata -pkg driver -prefix override override/...
+//go:generate go-bindata -nometadata -pkg driver -prefix override override/...
 package driver
 
 import (
@@ -36,7 +36,7 @@ type CockroachDBDriver struct {
 }
 
 // Templates that should be added/overridden
-func (c *CockroachDBDriver) Templates() (map[string]string, error) {
+func (d *CockroachDBDriver) Templates() (map[string]string, error) {
 	names := AssetNames()
 	tpls := make(map[string]string)
 	for _, n := range names {
@@ -52,7 +52,7 @@ func (c *CockroachDBDriver) Templates() (map[string]string, error) {
 }
 
 // Assemble all the information we need to provide back to the driver
-func (c *CockroachDBDriver) Assemble(config drivers.Config) (dbinfo *drivers.DBInfo, err error) {
+func (d *CockroachDBDriver) Assemble(config drivers.Config) (dbinfo *drivers.DBInfo, err error) {
 	defer func() {
 		if r := recover(); r != nil && err == nil {
 			dbinfo = nil
@@ -65,21 +65,21 @@ func (c *CockroachDBDriver) Assemble(config drivers.Config) (dbinfo *drivers.DBI
 	dbname := config.MustString(drivers.ConfigDBName)
 	host := config.MustString(drivers.ConfigHost)
 	port := config.DefaultInt(drivers.ConfigPort, 26257)
-	sslmode := config.DefaultString(drivers.ConfigSSLMode, "require")
+	sslmode := config.DefaultString(drivers.ConfigSSLMode, "disable")
 	schema := config.DefaultString(drivers.ConfigSchema, "public")
 	whitelist, _ := config.StringSlice(drivers.ConfigWhitelist)
 	blacklist, _ := config.StringSlice(drivers.ConfigBlacklist)
 
 	useSchema := schema != "public"
 
-	c.connStr = CockroachDBBuildQueryString(user, pass, dbname, host, port, sslmode)
-	c.conn, err = sql.Open("postgres", c.connStr)
+	d.connStr = buildQueryString(user, pass, dbname, host, port, sslmode)
+	d.conn, err = sql.Open("postgres", d.connStr)
 	if err != nil {
 		return nil, errors.Wrap(err, "sqlboiler-crdb failed to connect to database")
 	}
 
 	defer func() {
-		if e := c.conn.Close(); e != nil {
+		if e := d.conn.Close(); e != nil {
 			dbinfo = nil
 			err = e
 		}
@@ -97,7 +97,7 @@ func (c *CockroachDBDriver) Assemble(config drivers.Config) (dbinfo *drivers.DBI
 		},
 	}
 
-	dbinfo.Tables, err = drivers.Tables(c, schema, whitelist, blacklist)
+	dbinfo.Tables, err = drivers.Tables(d, schema, whitelist, blacklist)
 	if err != nil {
 		return nil, err
 	}
@@ -105,52 +105,33 @@ func (c *CockroachDBDriver) Assemble(config drivers.Config) (dbinfo *drivers.DBI
 	return dbinfo, err
 }
 
-// CockroachDBBuildQueryString builds a query string.
-func CockroachDBBuildQueryString(user, pass, dbname, host string, port int, sslmode string) string {
-	parts := []string{}
-	if len(user) != 0 {
-		parts = append(parts, fmt.Sprintf("user=%s", user))
-	}
-	if len(pass) != 0 {
-		parts = append(parts, fmt.Sprintf("password=%s", pass))
-	}
-	if len(dbname) != 0 {
-		parts = append(parts, fmt.Sprintf("dbname=%s", dbname))
-	}
-	if len(host) != 0 {
-		parts = append(parts, fmt.Sprintf("host=%s", host))
-	}
-	if port != 0 {
-		parts = append(parts, fmt.Sprintf("port=%d", port))
-	}
-	if len(sslmode) != 0 {
-		parts = append(parts, fmt.Sprintf("sslmode=%s", sslmode))
-	}
-
-	return strings.Join(parts, " ")
-}
-
 // TableNames connects to the postgres database and
 // retrieves all table names from the information_schema where the
 // table schema is schema. It uses a whitelist and blacklist.
-func (c *CockroachDBDriver) TableNames(schema string, whitelist, blacklist []string) ([]string, error) {
+func (d *CockroachDBDriver) TableNames(schema string, whitelist, blacklist []string) ([]string, error) {
 	var names []string
 
 	query := fmt.Sprintf(`select table_name from information_schema.tables where table_schema = $1`)
 	args := []interface{}{schema}
 	if len(whitelist) > 0 {
-		query += fmt.Sprintf(" and table_name in (%s);", strmangle.Placeholders(true, len(whitelist), 2, 1))
-		for _, w := range whitelist {
-			args = append(args, w)
+		tables := drivers.TablesFromList(whitelist)
+		if len(tables) > 0 {
+			query += fmt.Sprintf(" and table_name in (%s);", strmangle.Placeholders(true, len(tables), 2, 1))
+			for _, w := range tables {
+				args = append(args, w)
+			}
 		}
 	} else if len(blacklist) > 0 {
-		query += fmt.Sprintf(" and table_name not in (%s);", strmangle.Placeholders(true, len(blacklist), 2, 1))
-		for _, b := range blacklist {
-			args = append(args, b)
+		tables := drivers.TablesFromList(blacklist)
+		if len(tables) > 0 {
+			query += fmt.Sprintf(" and table_name not in (%s);", strmangle.Placeholders(true, len(tables), 2, 1))
+			for _, b := range tables {
+				args = append(args, b)
+			}
 		}
 	}
 
-	rows, err := c.conn.Query(query, args...)
+	rows, err := d.conn.Query(query, args...)
 
 	if err != nil {
 		return nil, err
@@ -172,7 +153,7 @@ func (c *CockroachDBDriver) TableNames(schema string, whitelist, blacklist []str
 // from the database information_schema.columns. It retrieves the column names
 // and column types and returns those as a []Column after TranslateColumnType()
 // converts the SQL types to Go types, for example: "varchar" to "string"
-func (c *CockroachDBDriver) Columns(schema, tableName string, whitelist, blacklist []string) ([]drivers.Column, error) {
+func (d *CockroachDBDriver) Columns(schema, tableName string, whitelist, blacklist []string) ([]drivers.Column, error) {
 	var columns []drivers.Column
 
 	args := []interface{}{schema, tableName}
@@ -207,7 +188,7 @@ func (c *CockroachDBDriver) Columns(schema, tableName string, whitelist, blackli
 		}
 	}
 
-	rows, err := c.conn.Query(query, args...)
+	rows, err := d.conn.Query(query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -248,7 +229,7 @@ func (c *CockroachDBDriver) Columns(schema, tableName string, whitelist, blackli
 }
 
 // PrimaryKeyInfo looks up the primary key for a table.
-func (c *CockroachDBDriver) PrimaryKeyInfo(schema, tableName string) (*drivers.PrimaryKey, error) {
+func (d *CockroachDBDriver) PrimaryKeyInfo(schema, tableName string) (*drivers.PrimaryKey, error) {
 	pkey := &drivers.PrimaryKey{}
 	var err error
 
@@ -257,7 +238,7 @@ func (c *CockroachDBDriver) PrimaryKeyInfo(schema, tableName string) (*drivers.P
 	from information_schema.table_constraints as tc
 	where tc.table_name = $1 and tc.constraint_type = 'PRIMARY KEY' and tc.table_schema = $2;`
 
-	row := c.conn.QueryRow(query, tableName, schema)
+	row := d.conn.QueryRow(query, tableName, schema)
 	if err = row.Scan(&pkey.Name); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
@@ -271,7 +252,7 @@ func (c *CockroachDBDriver) PrimaryKeyInfo(schema, tableName string) (*drivers.P
 	where  constraint_name = $1 and table_schema = $2 and table_name = $3;`
 
 	var rows *sql.Rows
-	if rows, err = c.conn.Query(queryColumns, pkey.Name, schema, tableName); err != nil {
+	if rows, err = d.conn.Query(queryColumns, pkey.Name, schema, tableName); err != nil {
 		return nil, err
 	}
 
@@ -299,7 +280,7 @@ func (c *CockroachDBDriver) PrimaryKeyInfo(schema, tableName string) (*drivers.P
 }
 
 // ForeignKeyInfo retrieves the foreign keys for a given table name.
-func (c *CockroachDBDriver) ForeignKeyInfo(schema, tableName string) ([]drivers.ForeignKey, error) {
+func (d *CockroachDBDriver) ForeignKeyInfo(schema, tableName string) ([]drivers.ForeignKey, error) {
 	var fkeys []drivers.ForeignKey
 
 	query := `
@@ -321,7 +302,7 @@ func (c *CockroachDBDriver) ForeignKeyInfo(schema, tableName string) ([]drivers.
 
 	var rows *sql.Rows
 	var err error
-	if rows, err = c.conn.Query(query, tableName, schema); err != nil {
+	if rows, err = d.conn.Query(query, tableName, schema); err != nil {
 		return nil, err
 	}
 
@@ -348,7 +329,7 @@ func (c *CockroachDBDriver) ForeignKeyInfo(schema, tableName string) ([]drivers.
 // TranslateColumnType converts Cockroach database types to Go types, for example
 // "varchar" to "string" and "bigint" to "int64". It returns this parsed data
 // as a Column object.
-func (p *CockroachDBDriver) TranslateColumnType(c drivers.Column) drivers.Column {
+func (d *CockroachDBDriver) TranslateColumnType(c drivers.Column) drivers.Column {
 	// parse DB type
 	if c.Nullable {
 		switch c.DBType {
@@ -359,7 +340,7 @@ func (p *CockroachDBDriver) TranslateColumnType(c drivers.Column) drivers.Column
 		case "smallint", "smallserial":
 			c.Type = "null.Int16"
 		case "decimal", "numeric", "double precision":
-			c.Type = "null.Float64"
+			c.Type = "types.NullDecimal"
 		case "real":
 			c.Type = "null.Float32"
 		case "string", "collate", "bit", "interval", "bit varying", "character", "character varying", "inet", "uuid", "text":
@@ -394,7 +375,7 @@ func (p *CockroachDBDriver) TranslateColumnType(c drivers.Column) drivers.Column
 		case "smallint", "smallserial":
 			c.Type = "int16"
 		case "decimal", "numeric", "double precision":
-			c.Type = "float64"
+			c.Type = "types.Decimal"
 		case "real":
 			c.Type = "float32"
 		case "string", "collate", "bit", "interval", "bit varying", "character", "character varying", "inet", "uuid", "text":
@@ -436,7 +417,7 @@ func getArrayType(c drivers.Column) string {
 	case "bool", "boolean":
 		return "types.BoolArray"
 	case "decimal", "numeric", "double precision", "real":
-		return "types.Float64Array"
+		return "types.DecimalArray"
 	default:
 		fmt.Fprintf(os.Stderr, "Warning: Unhandled array data type %s, falling back to types.StringArray\n", *c.ArrType)
 		return "types.StringArray"
@@ -444,10 +425,15 @@ func getArrayType(c drivers.Column) string {
 }
 
 // Imports for the postgres driver
-func (c *CockroachDBDriver) Imports() (importers.Collection, error) {
+func (d *CockroachDBDriver) Imports() (importers.Collection, error) {
 	var col importers.Collection
 
-	col.TestSingleton = importers.Map{
+	col.All = importers.Set{
+		Standard: importers.List{
+			`"strconv"`,
+		},
+	}
+	col.Singleton = importers.Map{
 		"crdb_upsert": {
 			Standard: importers.List{
 				`"fmt"`,
@@ -458,6 +444,8 @@ func (c *CockroachDBDriver) Imports() (importers.Collection, error) {
 				`"github.com/volatiletech/sqlboiler/drivers"`,
 			},
 		},
+	}
+	col.TestSingleton = importers.Map{
 		"crdb_suites_test": {
 			Standard: importers.List{
 				`"testing"`,
@@ -477,7 +465,6 @@ func (c *CockroachDBDriver) Imports() (importers.Collection, error) {
 			ThirdParty: importers.List{
 				`"github.com/pkg/errors"`,
 				`"github.com/spf13/viper"`,
-				`"github.com/glerchundi/sqlboiler-crdb/pkg/driver"`,
 				`"github.com/volatiletech/sqlboiler/randomize"`,
 				`_ "github.com/lib/pq"`,
 			},
@@ -485,60 +472,63 @@ func (c *CockroachDBDriver) Imports() (importers.Collection, error) {
 	}
 	col.BasedOnType = importers.Map{
 		"null.Float32": {
-			ThirdParty: importers.List{`"gopkg.in/volatiletech/null.v6"`},
+			ThirdParty: importers.List{`"gopkg.in/volatiletech/null.v7"`},
 		},
 		"null.Float64": {
-			ThirdParty: importers.List{`"gopkg.in/volatiletech/null.v6"`},
+			ThirdParty: importers.List{`"gopkg.in/volatiletech/null.v7"`},
 		},
 		"null.Int": {
-			ThirdParty: importers.List{`"gopkg.in/volatiletech/null.v6"`},
+			ThirdParty: importers.List{`"gopkg.in/volatiletech/null.v7"`},
 		},
 		"null.Int8": {
-			ThirdParty: importers.List{`"gopkg.in/volatiletech/null.v6"`},
+			ThirdParty: importers.List{`"gopkg.in/volatiletech/null.v7"`},
 		},
 		"null.Int16": {
-			ThirdParty: importers.List{`"gopkg.in/volatiletech/null.v6"`},
+			ThirdParty: importers.List{`"gopkg.in/volatiletech/null.v7"`},
 		},
 		"null.Int32": {
-			ThirdParty: importers.List{`"gopkg.in/volatiletech/null.v6"`},
+			ThirdParty: importers.List{`"gopkg.in/volatiletech/null.v7"`},
 		},
 		"null.Int64": {
-			ThirdParty: importers.List{`"gopkg.in/volatiletech/null.v6"`},
+			ThirdParty: importers.List{`"gopkg.in/volatiletech/null.v7"`},
 		},
 		"null.Uint": {
-			ThirdParty: importers.List{`"gopkg.in/volatiletech/null.v6"`},
+			ThirdParty: importers.List{`"gopkg.in/volatiletech/null.v7"`},
 		},
 		"null.Uint8": {
-			ThirdParty: importers.List{`"gopkg.in/volatiletech/null.v6"`},
+			ThirdParty: importers.List{`"gopkg.in/volatiletech/null.v7"`},
 		},
 		"null.Uint16": {
-			ThirdParty: importers.List{`"gopkg.in/volatiletech/null.v6"`},
+			ThirdParty: importers.List{`"gopkg.in/volatiletech/null.v7"`},
 		},
 		"null.Uint32": {
-			ThirdParty: importers.List{`"gopkg.in/volatiletech/null.v6"`},
+			ThirdParty: importers.List{`"gopkg.in/volatiletech/null.v7"`},
 		},
 		"null.Uint64": {
-			ThirdParty: importers.List{`"gopkg.in/volatiletech/null.v6"`},
+			ThirdParty: importers.List{`"gopkg.in/volatiletech/null.v7"`},
 		},
 		"null.String": {
-			ThirdParty: importers.List{`"gopkg.in/volatiletech/null.v6"`},
+			ThirdParty: importers.List{`"gopkg.in/volatiletech/null.v7"`},
 		},
 		"null.Bool": {
-			ThirdParty: importers.List{`"gopkg.in/volatiletech/null.v6"`},
+			ThirdParty: importers.List{`"gopkg.in/volatiletech/null.v7"`},
 		},
 		"null.Time": {
-			ThirdParty: importers.List{`"gopkg.in/volatiletech/null.v6"`},
+			ThirdParty: importers.List{`"gopkg.in/volatiletech/null.v7"`},
 		},
 		"null.JSON": {
-			ThirdParty: importers.List{`"gopkg.in/volatiletech/null.v6"`},
+			ThirdParty: importers.List{`"gopkg.in/volatiletech/null.v7"`},
 		},
 		"null.Bytes": {
-			ThirdParty: importers.List{`"gopkg.in/volatiletech/null.v6"`},
+			ThirdParty: importers.List{`"gopkg.in/volatiletech/null.v7"`},
 		},
 		"time.Time": {
 			Standard: importers.List{`"time"`},
 		},
 		"types.JSON": {
+			ThirdParty: importers.List{`"github.com/volatiletech/sqlboiler/types"`},
+		},
+		"types.Decimal": {
 			ThirdParty: importers.List{`"github.com/volatiletech/sqlboiler/types"`},
 		},
 		"types.BytesArray": {
@@ -556,7 +546,25 @@ func (c *CockroachDBDriver) Imports() (importers.Collection, error) {
 		"types.StringArray": {
 			ThirdParty: importers.List{`"github.com/volatiletech/sqlboiler/types"`},
 		},
+		"types.DecimalArray": {
+			ThirdParty: importers.List{`"github.com/volatiletech/sqlboiler/types"`},
+		},
+		"types.NullDecimal": {
+			ThirdParty: importers.List{`"github.com/volatiletech/sqlboiler/types"`},
+		},
 	}
 
 	return col, nil
+}
+
+func buildQueryString(user, pass, dbname, host string, port int, sslmode string) string {
+	var up string
+	if user != "" {
+		up = user
+	}
+	if pass != "" {
+		up = fmt.Sprintf("%s:%s", up, pass)
+	}
+
+	return fmt.Sprintf("postgresql://%s@%s:%d/%s?sslmode=%s", up, host, port, dbname, sslmode)
 }

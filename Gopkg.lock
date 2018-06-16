@@ -29,11 +29,11 @@
     "importers",
     "strmangle"
   ]
-  revision = "843d9811b79d03e1788294e4a7d93ded5637afe7"
+  revision = "v3.0.0-rc2"
 
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "521b4091306bfe8824d38d3c47f317dd2ff94f48ea5d536e6f474f65d4431cb8"
+  inputs-digest = "b6162f3d6a60c23a75793493798576625ece9ffc43e1a522624f904d57698315"
   solver-name = "gps-cdcl"
   solver-version = 1

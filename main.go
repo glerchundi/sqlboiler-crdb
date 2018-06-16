@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/glerchundi/sqlboiler-crdb/pkg/driver"
+	"github.com/glerchundi/sqlboiler-crdb/driver"
 	"github.com/volatiletech/sqlboiler/drivers"
 )
 
