@@ -14,7 +14,7 @@ func buildUpsertQueryCockroachDB(dia drivers.Dialect, tableName string, updateOn
 			strmangle.Placeholders(dia.UseIndexPlaceholders, len(whitelist), 1, 1))
 	}
 
-	fmt.Fprintf(
+	_, _ = fmt.Fprintf(
 		buf,
 		"INSERT INTO %s %s ON CONFLICT ",
 		tableName,
