@@ -121,10 +121,22 @@ func (c *crdbTester) conn() (*sql.DB, error) {
   }
 
   var err error
-  c.dbConn, err = sql.Open("postgres", driver.CockroachDBBuildQueryString(c.user, c.pass, c.testDBName, c.host, c.port, c.sslmode))
+  c.dbConn, err = sql.Open("postgres", buildQueryString(c.user, c.pass, c.testDBName, c.host, c.port, c.sslmode))
   if err != nil {
     return nil, err
   }
 
   return c.dbConn, nil
+}
+
+func buildQueryString(user, pass, dbname, host string, port int, sslmode string) string {
+	var up string
+	if user != "" {
+		up = user
+	}
+	if pass != "" {
+		up = fmt.Sprintf("%s:%s", up, pass)
+	}
+
+	return fmt.Sprintf("postgresql://%s@%s:%d/%s?sslmode=%s", up, host, port, dbname, sslmode)
 }

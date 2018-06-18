@@ -1,7 +1,7 @@
 // These tests assume there is a user sqlboiler_driver_user and a database
 // by the name of sqlboiler_driver_test that it has full R/W rights to.
 // In order to create this you can use the following steps from a root
-// psql account:
+// crdb account:
 //
 //   create role sqlboiler_driver_user login nocreatedb nocreaterole nocreateuser password 'sqlboiler';
 //   create database sqlboiler_driver_test owner = sqlboiler_driver_user;
@@ -25,8 +25,8 @@ var (
 
 	envHostname = drivers.DefaultEnv("DRIVER_HOSTNAME", "localhost")
 	envPort     = drivers.DefaultEnv("DRIVER_PORT", "26257")
-	envUsername = drivers.DefaultEnv("DRIVER_USER", "sqlboiler_driver_user")
-	envPassword = drivers.DefaultEnv("DRIVER_PASS", "sqlboiler")
+	envUsername = drivers.DefaultEnv("DRIVER_USER", "root")
+	envPassword = drivers.DefaultEnv("DRIVER_PASS", "")
 	envDatabase = drivers.DefaultEnv("DRIVER_DB", "sqlboiler_driver_test")
 )
 
@@ -38,8 +38,8 @@ func TestAssemble(t *testing.T) {
 
 	out := &bytes.Buffer{}
 	port, _ := strconv.Atoi(envPort)
-	url := CockroachDBBuildQueryString(envUsername, envPassword, envDatabase, envHostname, port, "disable")
-	createDB := exec.Command("cockroach", "sql", "--insecure", "--url", url)
+	url := buildQueryString(envUsername, envPassword, envDatabase, envHostname, port, "disable")
+	createDB := exec.Command("cockroach", "sql", "--url", url)
 	createDB.Stdout = out
 	createDB.Stderr = out
 	createDB.Stdin = bytes.NewReader(b)
@@ -48,7 +48,7 @@ func TestAssemble(t *testing.T) {
 		t.Logf("cockroach output:\n%s\n", out.Bytes())
 		t.Fatal(err)
 	}
-	t.Logf("psql output:\n%s\n", out.Bytes())
+	t.Logf("cockroach output:\n%s\n", out.Bytes())
 
 	config := drivers.Config{
 		"user":    envUsername,
