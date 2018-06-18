@@ -54,14 +54,15 @@ func (c *crdbTester) setup() error {
   }
 
   if err = dumpCmd.Wait(); err != nil {
-      fmt.Println(err)
       return errors.Wrap(err, "failed to wait for 'cockroach sql' command")
   }
 
-  w.Close() // After dumpCmd is done, close the write end of the pipe
+  // After dumpCmd is done, close the write end of the pipe
+  if err = w.Close(); err != nil {
+      return errors.Wrap(err, "failed to close pipe")
+  }
 
   if err = createCmd.Wait(); err != nil {
-      fmt.Println(err)
       return errors.Wrap(err, "failed to wait for 'cockroach sql' command")
   }
 
