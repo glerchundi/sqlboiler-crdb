@@ -20,7 +20,9 @@ dbname="mydatabase"
 sslmode="disable"
 ```
 
-**Note**: Code generation against secure clusters is not tested yet.
+**Notes**:
+* Cockroach 2.x and greater are supported, no plans to add support for previous versions.
+* Code generation against secure clusters is not tested yet.
 
 ## Development
 
