@@ -339,8 +339,10 @@ func (d *CockroachDBDriver) TranslateColumnType(c drivers.Column) drivers.Column
 			c.Type = "null.Int"
 		case "smallint", "smallserial":
 			c.Type = "null.Int16"
-		case "decimal", "numeric", "double precision":
+		case "decimal", "numeric":
 			c.Type = "types.NullDecimal"
+		case "double precision":
+			c.Type = "null.Float64"
 		case "real":
 			c.Type = "null.Float32"
 		case "string", "collate", "bit", "interval", "bit varying", "character", "character varying", "inet", "uuid", "text":
@@ -374,8 +376,10 @@ func (d *CockroachDBDriver) TranslateColumnType(c drivers.Column) drivers.Column
 			c.Type = "int"
 		case "smallint", "smallserial":
 			c.Type = "int16"
-		case "decimal", "numeric", "double precision":
+		case "decimal", "numeric":
 			c.Type = "types.Decimal"
+		case "double precision":
+			c.Type = "float64"
 		case "real":
 			c.Type = "float32"
 		case "string", "collate", "bit", "interval", "bit varying", "character", "character varying", "inet", "uuid", "text":
@@ -416,8 +420,10 @@ func getArrayType(c drivers.Column) string {
 		return "types.StringArray"
 	case "bool", "boolean":
 		return "types.BoolArray"
-	case "decimal", "numeric", "double precision", "real":
+	case "decimal", "numeric":
 		return "types.DecimalArray"
+	case "double precision", "real":
+		return "types.Float64Array"
 	default:
 		fmt.Fprintf(os.Stderr, "Warning: Unhandled array data type %s, falling back to types.StringArray\n", *c.ArrType)
 		return "types.StringArray"
