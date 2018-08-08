@@ -104,6 +104,7 @@ create table type_monsters (
 	float_seven numeric(2,1) not null default 1.1,
 	float_eight numeric(2,1) null default 0.0,
 	float_nine  numeric(2,1) null default 0.0,
+	float_ten   float,
 
 	bytea_zero  bytea,
 	bytea_one   bytea null,
