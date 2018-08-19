@@ -164,10 +164,11 @@ func (d *CockroachDBDriver) Columns(schema, tableName string, whitelist, blackli
 		c.data_type,
 		c.column_default,
 		(case when c.is_nullable = 'NO' then FALSE else TRUE end) as is_nullable,
-		(case when kcu.constraint_name is not null then TRUE else False END) as is_unique
+		(case when pgc.contype IS NOT NULL AND pgc.contype IN ('p', 'u') then TRUE else FALSE end) as is_unique
 		from information_schema.columns as c
 			left join information_schema.key_column_usage kcu on c.table_name = kcu.table_name
 				and c.table_schema = kcu.table_schema and c.column_name = kcu.column_name
+			left join pg_constraint pgc on kcu.constraint_name = pgc.conname
 		where c.table_schema = $1 and c.table_name = $2;`
 
 	if len(whitelist) > 0 {
