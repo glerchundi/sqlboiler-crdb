@@ -161,15 +161,27 @@ func (d *CockroachDBDriver) Columns(schema, tableName string, whitelist, blackli
 	query := `
 		select
 		distinct c.column_name,
-		c.data_type,
-		c.column_default,
-		(case when c.is_nullable = 'NO' then FALSE else TRUE end) as is_nullable,
-		(case when pgc.contype IS NOT NULL AND pgc.contype IN ('p', 'u') then TRUE else FALSE end) as is_unique
+		max(c.data_type),
+		max(c.column_default),
+		bool_or(case when c.is_nullable = 'NO' then FALSE else TRUE end) as is_nullable,
+		bool_or(case when pc.count < 2 AND pgc.contype IN ('p', 'u') then TRUE else FALSE end) as is_unique
 		from information_schema.columns as c
-			left join information_schema.key_column_usage kcu on c.table_name = kcu.table_name
-				and c.table_schema = kcu.table_schema and c.column_name = kcu.column_name
-			left join pg_constraint pgc on kcu.constraint_name = pgc.conname
-		where c.table_schema = $1 and c.table_name = $2;`
+		LEFT JOIN (
+			select distinct c.column_name,
+			pgc.conname as conname,
+			pgc.contype as contype
+			from information_schema.columns as c
+			LEFT JOIN information_schema.key_column_usage kcu on c.table_name = kcu.table_name
+			and c.table_schema = kcu.table_schema and c.column_name = kcu.column_name
+			LEFT JOIN pg_constraint pgc on kcu.constraint_name = pgc.conname
+		) pgc on c.column_name = pgc.column_name
+		LEFT JOIN (
+			select kcu.table_schema, kcu.table_name, kcu.constraint_name, count(*)
+			from information_schema.key_column_usage kcu
+			group by kcu.table_schema, kcu.table_name, kcu.constraint_name
+		) pc on c.table_schema = pc.table_schema and c.table_name = pc.table_name and pgc.conname = pc.constraint_name
+		where c.table_schema = $1 and c.table_name = $2
+		group by c.column_name;`
 
 	if len(whitelist) > 0 {
 		cols := drivers.ColumnsFromList(whitelist, tableName)
