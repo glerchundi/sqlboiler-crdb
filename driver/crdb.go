@@ -158,30 +158,55 @@ func (d *CockroachDBDriver) Columns(schema, tableName string, whitelist, blackli
 
 	args := []interface{}{schema, tableName}
 
-	query := `
-		select
-		distinct c.column_name,
-		max(c.data_type) as data_type,
-		max(c.column_default) as column_default,
-		bool_or(case when c.is_nullable = 'NO' then FALSE else TRUE end) as is_nullable,
-		bool_or(case when pc.count < 2 AND pgc.contype IN ('p', 'u') then TRUE else FALSE end) as is_unique
-		from information_schema.columns as c
-		LEFT JOIN (
-			select distinct c.column_name,
-			pgc.conname as conname,
-			pgc.contype as contype
-			from information_schema.columns as c
-			LEFT JOIN information_schema.key_column_usage kcu on c.table_name = kcu.table_name
-			and c.table_schema = kcu.table_schema and c.column_name = kcu.column_name
-			LEFT JOIN pg_constraint pgc on kcu.constraint_name = pgc.conname
-		) pgc on c.column_name = pgc.column_name
-		LEFT JOIN (
-			select kcu.table_schema, kcu.table_name, kcu.constraint_name, count(*)
-			from information_schema.key_column_usage kcu
-			group by kcu.table_schema, kcu.table_name, kcu.constraint_name
-		) pc on c.table_schema = pc.table_schema and c.table_name = pc.table_name and pgc.conname = pc.constraint_name
-		where c.table_schema = $1 and c.table_name = $2
-		group by c.column_name;`
+	query := `SELECT
+    DISTINCT c.column_name,
+    max(c.data_type) AS data_type,
+    max(c.column_default) AS column_default,
+    bool_or(
+        CASE WHEN c.is_nullable = 'NO' THEN
+            FALSE
+        ELSE
+            TRUE
+        END) AS is_nullable,
+    bool_or(
+        CASE WHEN pc.count < 2
+            AND pgc.contype IN ('p', 'u') THEN
+            TRUE
+        ELSE
+            FALSE
+        END) AS is_unique
+FROM
+    information_schema.columns AS c
+    LEFT JOIN (
+        SELECT
+            DISTINCT c.column_name,
+            pgc.conname AS conname,
+            pgc.contype AS contype
+        FROM
+            information_schema.columns AS c
+            LEFT JOIN information_schema.key_column_usage kcu ON c.table_name = kcu.table_name
+                AND c.table_schema = kcu.table_schema
+                AND c.column_name = kcu.column_name
+        LEFT JOIN pg_constraint pgc ON kcu.constraint_name = pgc.conname) pgc ON c.column_name = pgc.column_name
+    LEFT JOIN (
+        SELECT
+            kcu.table_schema,
+            kcu.table_name,
+            kcu.constraint_name,
+            count(*)
+        FROM
+            information_schema.key_column_usage kcu
+        GROUP BY
+            kcu.table_schema,
+            kcu.table_name,
+            kcu.constraint_name) pc ON c.table_schema = pc.table_schema
+    AND c.table_name = pc.table_name
+    AND pgc.conname = pc.constraint_name
+WHERE
+    c.table_schema = $1
+    AND c.table_name = $2
+GROUP BY
+    c.column_name;`
 
 	if len(whitelist) > 0 {
 		cols := drivers.ColumnsFromList(whitelist, tableName)
@@ -246,10 +271,14 @@ func (d *CockroachDBDriver) PrimaryKeyInfo(schema, tableName string) (*drivers.P
 	pkey := &drivers.PrimaryKey{}
 	var err error
 
-	query := `
-	select tc.constraint_name
-	from information_schema.table_constraints as tc
-	where tc.table_name = $1 and tc.constraint_type = 'PRIMARY KEY' and tc.table_schema = $2;`
+	query := `SELECT
+    tc.constraint_name
+FROM
+    information_schema.table_constraints AS tc
+WHERE
+    tc.table_name = $1
+    AND tc.constraint_type = 'PRIMARY KEY'
+    AND tc.table_schema = $2;`
 
 	row := d.conn.QueryRow(query, tableName, schema)
 	if err = row.Scan(&pkey.Name); err != nil {
@@ -259,10 +288,14 @@ func (d *CockroachDBDriver) PrimaryKeyInfo(schema, tableName string) (*drivers.P
 		return nil, err
 	}
 
-	queryColumns := `
-	select kcu.column_name
-	from   information_schema.key_column_usage as kcu
-	where  constraint_name = $1 and table_schema = $2 and table_name = $3;`
+	queryColumns := `SELECT
+    kcu.column_name
+FROM
+    information_schema.key_column_usage AS kcu
+WHERE
+    constraint_name = $1
+    AND table_schema = $2
+    AND table_name = $3;`
 
 	var rows *sql.Rows
 	if rows, err = d.conn.Query(queryColumns, pkey.Name, schema, tableName); err != nil {
@@ -296,22 +329,29 @@ func (d *CockroachDBDriver) PrimaryKeyInfo(schema, tableName string) (*drivers.P
 func (d *CockroachDBDriver) ForeignKeyInfo(schema, tableName string) ([]drivers.ForeignKey, error) {
 	var fkeys []drivers.ForeignKey
 
-	query := `
-	select
-	  distinct pgcon.conname,
-	  pgc.relname as source_table,
-	  kcu.column_name as source_column,
-	  dstlookupname.relname as dest_table,
-	  pgadst.attname as dest_column
-	from pg_namespace pgn
-	  inner join pg_class pgc on pgn.oid = pgc.relnamespace and pgc.relkind = 'r'
-	  inner join pg_constraint pgcon on pgn.oid = pgcon.connamespace and pgc.oid = pgcon.conrelid
-	  inner join pg_class dstlookupname on pgcon.confrelid = dstlookupname.oid
-	  left join information_schema.key_column_usage kcu on pgcon.conname = kcu.constraint_name and pgc.relname = kcu.table_name
-	  left join information_schema.key_column_usage kcudst on pgcon.conname = kcu.constraint_name and dstlookupname.relname = kcu.table_name
-	  inner join pg_attribute pgadst on pgcon.confrelid = pgadst.attrelid and pgadst.attnum = ANY(pgcon.confkey)
-	where pgn.nspname = $2 and pgc.relname = $1 and pgcon.contype = 'f';
-	`
+	query := `SELECT
+    DISTINCT pgcon.conname,
+    pgc.relname AS source_table,
+    kcu.column_name AS source_column,
+    dstlookupname.relname AS dest_table,
+    pgadst.attname AS dest_column
+FROM
+    pg_namespace pgn
+    INNER JOIN pg_class pgc ON pgn.oid = pgc.relnamespace
+        AND pgc.relkind = 'r'
+    INNER JOIN pg_constraint pgcon ON pgn.oid = pgcon.connamespace
+        AND pgc.oid = pgcon.conrelid
+    INNER JOIN pg_class dstlookupname ON pgcon.confrelid = dstlookupname.oid
+    LEFT JOIN information_schema.key_column_usage kcu ON pgcon.conname = kcu.constraint_name
+        AND pgc.relname = kcu.table_name
+    LEFT JOIN information_schema.key_column_usage kcudst ON pgcon.conname = kcu.constraint_name
+        AND dstlookupname.relname = kcu.table_name
+    INNER JOIN pg_attribute pgadst ON pgcon.confrelid = pgadst.attrelid
+        AND pgadst.attnum = ANY (pgcon.confkey)
+WHERE
+    pgn.nspname = $2
+    AND pgc.relname = $1
+    AND pgcon.contype = 'f';`
 
 	var rows *sql.Rows
 	var err error
