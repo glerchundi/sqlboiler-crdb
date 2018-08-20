@@ -161,8 +161,8 @@ func (d *CockroachDBDriver) Columns(schema, tableName string, whitelist, blackli
 	query := `
 		select
 		distinct c.column_name,
-		max(c.data_type),
-		max(c.column_default),
+		max(c.data_type) as data_type,
+		max(c.column_default) as column_default,
 		bool_or(case when c.is_nullable = 'NO' then FALSE else TRUE end) as is_nullable,
 		bool_or(case when pc.count < 2 AND pgc.contype IN ('p', 'u') then TRUE else FALSE end) as is_unique
 		from information_schema.columns as c
