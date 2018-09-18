@@ -187,7 +187,11 @@ FROM
             LEFT JOIN information_schema.key_column_usage kcu ON c.table_name = kcu.table_name
                 AND c.table_schema = kcu.table_schema
                 AND c.column_name = kcu.column_name
-        LEFT JOIN pg_constraint pgc ON kcu.constraint_name = pgc.conname) pgc ON c.column_name = pgc.column_name
+        LEFT JOIN pg_constraint pgc ON kcu.constraint_name = pgc.conname
+        WHERE
+            c.table_schema = $1
+            AND c.table_name = $2
+    ) pgc ON c.column_name = pgc.column_name
     LEFT JOIN (
         SELECT
             kcu.table_schema,
