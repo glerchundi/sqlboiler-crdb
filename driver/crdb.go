@@ -179,47 +179,36 @@ func (d *CockroachDBDriver) Columns(schema, tableName string, whitelist, blackli
 	)
 		AS is_unique
 FROM
-	information_schema.columns AS c
-	LEFT JOIN
-		(
-			SELECT
-				DISTINCT
-				c.column_name,
-				pgc.conname AS conname,
-				pgc.contype AS contype
-			FROM
-				information_schema.columns AS c
-				LEFT JOIN
-					information_schema.key_column_usage
-						AS kcu
-				ON
-					c.table_name = kcu.table_name
-					AND c.table_schema = kcu.table_schema
-					AND c.column_name = kcu.column_name
-				LEFT JOIN pg_constraint AS pgc
-				ON kcu.constraint_name = pgc.conname
-		)
-			AS pgc
-	ON c.column_name = pgc.column_name
-	LEFT JOIN
-		(
-			SELECT
-				kcu.table_schema,
-				kcu.table_name,
-				kcu.constraint_name,
-				count(*)
-			FROM
-				information_schema.key_column_usage AS kcu
-			GROUP BY
-				kcu.table_schema,
-				kcu.table_name,
-				kcu.constraint_name
-		)
-			AS pc
-	ON
-		c.table_schema = pc.table_schema
-		AND c.table_name = pc.table_name
-		AND pgc.conname = pc.constraint_name
+    information_schema.columns AS c
+    LEFT JOIN (
+        SELECT
+            DISTINCT c.column_name,
+            pgc.conname AS conname,
+            pgc.contype AS contype
+        FROM
+            information_schema.columns AS c
+            LEFT JOIN information_schema.key_column_usage kcu ON c.table_name = kcu.table_name
+                AND c.table_schema = kcu.table_schema
+                AND c.column_name = kcu.column_name
+        LEFT JOIN pg_constraint pgc ON kcu.constraint_name = pgc.conname
+        WHERE
+            c.table_schema = $1
+            AND c.table_name = $2
+    ) pgc ON c.column_name = pgc.column_name
+    LEFT JOIN (
+        SELECT
+            kcu.table_schema,
+            kcu.table_name,
+            kcu.constraint_name,
+            count(*)
+        FROM
+            information_schema.key_column_usage kcu
+        GROUP BY
+            kcu.table_schema,
+            kcu.table_name,
+            kcu.constraint_name) pc ON c.table_schema = pc.table_schema
+    AND c.table_name = pc.table_name
+    AND pgc.conname = pc.constraint_name
 WHERE
 	c.table_schema = $1 AND c.table_name = $2
 GROUP BY
