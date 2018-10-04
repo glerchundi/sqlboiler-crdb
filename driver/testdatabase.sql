@@ -3,11 +3,29 @@ drop table if exists video_tags;
 drop table if exists tags;
 drop table if exists videos;
 drop table if exists sponsors;
+drop table if exists comments;
+drop table if exists posts;
 drop table if exists users;
 drop table if exists type_monsters;
 
 create table users (
 	id serial primary key not null
+);
+
+create table posts (
+	id serial primary key not null,
+	user_id int null,
+	content string null,
+
+	foreign key (user_id) references users (id)
+);
+
+CREATE TABLE comments (
+	user_id int null,
+	post_id int null,
+	content string null,
+
+	primary key (user_id, post_id)
 );
 
 create table sponsors (
