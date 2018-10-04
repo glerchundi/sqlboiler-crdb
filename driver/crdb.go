@@ -159,54 +159,73 @@ func (d *CockroachDBDriver) Columns(schema, tableName string, whitelist, blackli
 	args := []interface{}{schema, tableName}
 
 	query := `SELECT
-    DISTINCT c.column_name,
-    max(c.data_type) AS data_type,
-    max(c.column_default) AS column_default,
-    bool_or(
-        CASE WHEN c.is_nullable = 'NO' THEN
-            FALSE
-        ELSE
-            TRUE
-        END) AS is_nullable,
-    bool_or(
-        CASE WHEN pc.count < 2
-            AND pgc.contype IN ('p', 'u') THEN
-            TRUE
-        ELSE
-            FALSE
-        END) AS is_unique
+	DISTINCT
+	c.column_name,
+	max(c.data_type) AS data_type,
+	max(c.column_default) AS column_default,
+	bool_or(
+		CASE
+		WHEN c.is_nullable = 'NO' THEN false
+		ELSE true
+		END
+	)
+		AS is_nullable,
+	bool_or(
+		CASE
+		WHEN pc.count < 2 AND pgc.contype IN ('p', 'u')
+		THEN true
+		ELSE false
+		END
+	)
+		AS is_unique
 FROM
-    information_schema.columns AS c
-    LEFT JOIN (
-        SELECT
-            DISTINCT c.column_name,
-            pgc.conname AS conname,
-            pgc.contype AS contype
-        FROM
-            information_schema.columns AS c
-            LEFT JOIN information_schema.key_column_usage kcu ON c.table_name = kcu.table_name
-                AND c.table_schema = kcu.table_schema
-                AND c.column_name = kcu.column_name
-        LEFT JOIN pg_constraint pgc ON kcu.constraint_name = pgc.conname) pgc ON c.column_name = pgc.column_name
-    LEFT JOIN (
-        SELECT
-            kcu.table_schema,
-            kcu.table_name,
-            kcu.constraint_name,
-            count(*)
-        FROM
-            information_schema.key_column_usage kcu
-        GROUP BY
-            kcu.table_schema,
-            kcu.table_name,
-            kcu.constraint_name) pc ON c.table_schema = pc.table_schema
-    AND c.table_name = pc.table_name
-    AND pgc.conname = pc.constraint_name
+	information_schema.columns AS c
+	LEFT JOIN
+		(
+			SELECT
+				DISTINCT
+				c.column_name,
+				pgc.conname AS conname,
+				pgc.contype AS contype
+			FROM
+				information_schema.columns AS c
+				LEFT JOIN
+					information_schema.key_column_usage
+						AS kcu
+				ON
+					c.table_name = kcu.table_name
+					AND c.table_schema = kcu.table_schema
+					AND c.column_name = kcu.column_name
+				LEFT JOIN pg_constraint AS pgc
+				ON kcu.constraint_name = pgc.conname
+		)
+			AS pgc
+	ON c.column_name = pgc.column_name
+	LEFT JOIN
+		(
+			SELECT
+				kcu.table_schema,
+				kcu.table_name,
+				kcu.constraint_name,
+				count(*)
+			FROM
+				information_schema.key_column_usage AS kcu
+			GROUP BY
+				kcu.table_schema,
+				kcu.table_name,
+				kcu.constraint_name
+		)
+			AS pc
+	ON
+		c.table_schema = pc.table_schema
+		AND c.table_name = pc.table_name
+		AND pgc.conname = pc.constraint_name
 WHERE
-    c.table_schema = $1
-    AND c.table_name = $2
+	c.table_schema = $1 AND c.table_name = $2
 GROUP BY
-    c.column_name;`
+	c.ordinal_position, c.column_name
+ORDER BY
+    c.ordinal_position ASC;`
 
 	if len(whitelist) > 0 {
 		cols := drivers.ColumnsFromList(whitelist, tableName)
@@ -330,28 +349,40 @@ func (d *CockroachDBDriver) ForeignKeyInfo(schema, tableName string) ([]drivers.
 	var fkeys []drivers.ForeignKey
 
 	query := `SELECT
-    DISTINCT pgcon.conname,
+    DISTINCT
+    pgcon.conname,
     pgc.relname AS source_table,
     kcu.column_name AS source_column,
     dstlookupname.relname AS dest_table,
     pgadst.attname AS dest_column
 FROM
-    pg_namespace pgn
-    INNER JOIN pg_class pgc ON pgn.oid = pgc.relnamespace
-        AND pgc.relkind = 'r'
-    INNER JOIN pg_constraint pgcon ON pgn.oid = pgcon.connamespace
+    pg_namespace AS pgn
+    INNER JOIN pg_class AS pgc
+    ON pgn.oid = pgc.relnamespace AND pgc.relkind = 'r'
+    INNER JOIN pg_constraint AS pgcon
+    ON
+        pgn.oid = pgcon.connamespace
         AND pgc.oid = pgcon.conrelid
-    INNER JOIN pg_class dstlookupname ON pgcon.confrelid = dstlookupname.oid
-    LEFT JOIN information_schema.key_column_usage kcu ON pgcon.conname = kcu.constraint_name
+    INNER JOIN pg_class AS dstlookupname
+    ON pgcon.confrelid = dstlookupname.oid
+    LEFT JOIN information_schema.key_column_usage AS kcu
+    ON
+        pgcon.conname = kcu.constraint_name
         AND pgc.relname = kcu.table_name
-    LEFT JOIN information_schema.key_column_usage kcudst ON pgcon.conname = kcu.constraint_name
+    LEFT JOIN information_schema.key_column_usage AS kcudst
+    ON
+        pgcon.conname = kcu.constraint_name
         AND dstlookupname.relname = kcu.table_name
-    INNER JOIN pg_attribute pgadst ON pgcon.confrelid = pgadst.attrelid
-        AND pgadst.attnum = ANY (pgcon.confkey)
+    INNER JOIN pg_attribute AS pgadst
+    ON
+        pgcon.confrelid = pgadst.attrelid
+        AND pgadst.attnum = ANY pgcon.confkey
 WHERE
     pgn.nspname = $2
     AND pgc.relname = $1
-    AND pgcon.contype = 'f';`
+    AND pgcon.contype = 'f'
+ORDER BY
+    pgcon.conname DESC;`
 
 	var rows *sql.Rows
 	var err error
