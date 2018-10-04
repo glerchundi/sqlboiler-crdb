@@ -198,6 +198,9 @@ FROM
 					AND c.column_name = kcu.column_name
 				LEFT JOIN pg_constraint AS pgc
 				ON kcu.constraint_name = pgc.conname
+        WHERE
+            c.table_schema = $1
+            AND c.table_name = $2
 		)
 			AS pgc
 	ON c.column_name = pgc.column_name
