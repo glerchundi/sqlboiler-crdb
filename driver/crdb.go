@@ -225,7 +225,7 @@ WHERE
 GROUP BY
 	c.ordinal_position, c.column_name
 ORDER BY
-    c.ordinal_position ASC;`
+	c.ordinal_position ASC;`
 
 	if len(whitelist) > 0 {
 		cols := drivers.ColumnsFromList(whitelist, tableName)

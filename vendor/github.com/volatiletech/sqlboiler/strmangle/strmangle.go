@@ -17,7 +17,7 @@ var (
 	idAlphabet    = []byte("abcdefghijklmnopqrstuvwxyz")
 	smartQuoteRgx = regexp.MustCompile(`^(?i)"?[a-z_][_a-z0-9]*"?(\."?[_a-z][_a-z0-9]*"?)*(\.\*)?$`)
 
-	rgxEnum            = regexp.MustCompile(`^enum(\.[a-z_]+)?\((,?'[^']+')+\)$`)
+	rgxEnum            = regexp.MustCompile(`^enum(\.[a-z0-9_]+)?\((,?'[^']+')+\)$`)
 	rgxEnumIsOK        = regexp.MustCompile(`^(?i)[a-z][a-z0-9_]*$`)
 	rgxEnumShouldTitle = regexp.MustCompile(`^[a-z][a-z0-9_]*$`)
 )
@@ -317,11 +317,13 @@ func TitleCase(n string) string {
 // CamelCase takes a variable name in the format of "var_name" and converts
 // it into a go styled variable name of "varName".
 // camelCase also fully uppercases "ID" components of names, for example
-// "var_name_id" to "varNameID".
+// "var_name_id" to "varNameID". It will also lowercase the first letter
+// of the name in the case where it's fed something that starts with uppercase.
 func CamelCase(name string) string {
 	buf := GetBuffer()
 	defer PutBuffer(buf)
 
+	// Discard all leading '_'
 	index := -1
 	for i := 0; i < len(name); i++ {
 		if name[i] != '_' {
@@ -345,10 +347,16 @@ func CamelCase(name string) string {
 	}
 
 	if index == -1 {
-		buf.WriteString(name)
+		buf.WriteString(strings.ToLower(string(name[0])))
+		if len(name) > 1 {
+			buf.WriteString(name[1:])
+		}
 	} else {
-		buf.WriteString(name[:index])
-		buf.WriteString(TitleCase(name[index+1:]))
+		buf.WriteString(strings.ToLower(string(name[0])))
+		if len(name) > 1 {
+			buf.WriteString(name[1:index])
+			buf.WriteString(TitleCase(name[index+1:]))
+		}
 	}
 
 	return buf.String()
