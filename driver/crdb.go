@@ -9,14 +9,11 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/volatiletech/sqlboiler/importers"
-
+	_ "github.com/lib/pq" // Side-effect import sql driver
 	"github.com/pkg/errors"
 	"github.com/volatiletech/sqlboiler/drivers"
+	"github.com/volatiletech/sqlboiler/importers"
 	"github.com/volatiletech/sqlboiler/strmangle"
-
-	// Side-effect import sql driver
-	_ "github.com/lib/pq"
 )
 
 var re = regexp.MustCompile(`\(([^\)]+)\)`)
@@ -161,6 +158,7 @@ func (d *CockroachDBDriver) Columns(schema, tableName string, whitelist, blackli
 	query := `SELECT
     DISTINCT
     c.column_name,
+    c.ordinal_position,
     max(c.data_type) AS data_type,
     max(c.column_default) AS column_default,
     bool_or(
@@ -255,9 +253,10 @@ ORDER BY
 
 	for rows.Next() {
 		var colName, colType, udtName string
+		var ordinalPos int32
 		var defaultValue, arrayType *string
 		var nullable, unique bool
-		if err := rows.Scan(&colName, &colType, &defaultValue, &nullable, &unique); err != nil {
+		if err := rows.Scan(&colName, &ordinalPos, &colType, &defaultValue, &nullable, &unique); err != nil {
 			return nil, errors.Wrapf(err, "unable to scan for table %s", tableName)
 		}
 
