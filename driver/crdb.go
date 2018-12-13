@@ -452,7 +452,7 @@ func (d *CockroachDBDriver) TranslateColumnType(c drivers.Column) drivers.Column
 			c.Type = "null.JSON"
 		case "bool", "boolean":
 			c.Type = "null.Bool"
-		case "date", "time", "timestamp", "timestamp without time zone", "timestamp with time zone":
+		case "date", "time", "timestamp", "timestamp without time zone", "timestamptz", "timestamp with time zone":
 			c.Type = "null.Time"
 		case "array", "ARRAY":
 			if c.ArrType == nil {
@@ -489,7 +489,7 @@ func (d *CockroachDBDriver) TranslateColumnType(c drivers.Column) drivers.Column
 			c.Type = "types.JSON"
 		case "bool", "boolean":
 			c.Type = "bool"
-		case "date", "time", "timestamp", "timestamp without time zone", "timestamp with time zone":
+		case "date", "time", "timestamp", "timestamp without time zone", "timestamptz", "timestamp with time zone":
 			c.Type = "time.Time"
 		case "array", "ARRAY":
 			if c.ArrType == nil {
