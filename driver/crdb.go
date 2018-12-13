@@ -102,7 +102,7 @@ func (d *CockroachDBDriver) Assemble(config drivers.Config) (dbinfo *drivers.DBI
 	return dbinfo, err
 }
 
-// TableNames connects to the postgres database and
+// TableNames connects to the CockroachDB database and
 // retrieves all table names from the information_schema where the
 // table schema is schema. It uses a whitelist and blacklist.
 func (d *CockroachDBDriver) TableNames(schema string, whitelist, blacklist []string) ([]string, error) {
@@ -442,7 +442,7 @@ func (d *CockroachDBDriver) TranslateColumnType(c drivers.Column) drivers.Column
 			c.Type = "null.Float64"
 		case "real":
 			c.Type = "null.Float32"
-		case "string", "collate", "bit", "interval", "bit varying", "character", "character varying", "inet", "uuid", "text":
+		case "string", "collate", "bit", "interval", "bit varying", "character", "character varying", "char", "varchar", "inet", "uuid", "text":
 			c.Type = "null.String"
 		case `"char"`:
 			c.Type = "null.Byte"
@@ -456,7 +456,7 @@ func (d *CockroachDBDriver) TranslateColumnType(c drivers.Column) drivers.Column
 			c.Type = "null.Time"
 		case "array", "ARRAY":
 			if c.ArrType == nil {
-				panic("unable to get postgres ARRAY underlying type")
+				panic("unable to get CockroachDB ARRAY underlying type")
 			}
 			c.Type = getArrayType(c)
 			// Make DBType something like ARRAYinteger for parsing with randomize.Struct
@@ -479,7 +479,7 @@ func (d *CockroachDBDriver) TranslateColumnType(c drivers.Column) drivers.Column
 			c.Type = "float64"
 		case "real":
 			c.Type = "float32"
-		case "string", "collate", "bit", "interval", "bit varying", "character", "character varying", "inet", "uuid", "text":
+		case "string", "collate", "bit", "interval", "bit varying", "character", "character varying", "char", "varchar", "inet", "uuid", "text":
 			c.Type = "string"
 		case `"char"`:
 			c.Type = "types.Byte"
@@ -493,7 +493,7 @@ func (d *CockroachDBDriver) TranslateColumnType(c drivers.Column) drivers.Column
 			c.Type = "time.Time"
 		case "array", "ARRAY":
 			if c.ArrType == nil {
-				panic("unable to get Cockroach ARRAY underlying type")
+				panic("unable to get CockroachDB ARRAY underlying type")
 			}
 			c.Type = getArrayType(c)
 			// Make DBType something like ARRAYinteger for parsing with randomize.Struct
@@ -513,7 +513,7 @@ func getArrayType(c drivers.Column) string {
 		return "types.Int64Array"
 	case "bytes", "bytea":
 		return "types.BytesArray"
-	case "string", "collate", "bit", "interval", "bit varying", "character", "character varying", "inet", "text", "uuid":
+	case "string", "collate", "bit", "interval", "bit varying", "character", "character varying", "char", "varchar", "inet", "text", "uuid":
 		return "types.StringArray"
 	case "bool", "boolean":
 		return "types.BoolArray"
@@ -527,7 +527,7 @@ func getArrayType(c drivers.Column) string {
 	}
 }
 
-// Imports for the postgres driver
+// Imports for the CockroachDB driver
 func (d *CockroachDBDriver) Imports() (importers.Collection, error) {
 	var col importers.Collection
 
