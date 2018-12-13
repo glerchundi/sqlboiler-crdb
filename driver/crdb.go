@@ -430,15 +430,15 @@ func (d *CockroachDBDriver) TranslateColumnType(c drivers.Column) drivers.Column
 	// parse DB type
 	if c.Nullable {
 		switch c.DBType {
-		case "bigint", "bigserial":
+		case "int8", "bigint", "bigserial":
 			c.Type = "null.Int64"
-		case "int", "integer", "serial":
+		case "int4", "int", "integer", "serial":
 			c.Type = "null.Int"
-		case "smallint", "smallserial":
+		case "int2", "smallint", "smallserial":
 			c.Type = "null.Int16"
 		case "decimal", "numeric":
 			c.Type = "types.NullDecimal"
-		case "float", "double precision":
+		case "float8", "float", "double precision":
 			c.Type = "null.Float64"
 		case "real":
 			c.Type = "null.Float32"
@@ -467,15 +467,15 @@ func (d *CockroachDBDriver) TranslateColumnType(c drivers.Column) drivers.Column
 		}
 	} else {
 		switch c.DBType {
-		case "bigint", "bigserial":
+		case "int8", "bigint", "bigserial":
 			c.Type = "int64"
-		case "int", "integer", "serial":
+		case "int4", "int", "integer", "serial":
 			c.Type = "int"
-		case "smallint", "smallserial":
+		case "int2", "smallint", "smallserial":
 			c.Type = "int16"
 		case "decimal", "numeric":
 			c.Type = "types.Decimal"
-		case "float", "double precision":
+		case "float8", "float", "double precision":
 			c.Type = "float64"
 		case "real":
 			c.Type = "float32"
@@ -509,7 +509,7 @@ func (d *CockroachDBDriver) TranslateColumnType(c drivers.Column) drivers.Column
 // getArrayType returns the correct boil.Array type for each database type
 func getArrayType(c drivers.Column) string {
 	switch *c.ArrType {
-	case "int", "integer", "serial", "smallint", "smallserial", "bigint", "bigserial":
+	case "int2", "int4", "int8", "int", "integer", "serial", "smallint", "smallserial", "bigint", "bigserial":
 		return "types.Int64Array"
 	case "bytes", "bytea":
 		return "types.BytesArray"
@@ -519,7 +519,7 @@ func getArrayType(c drivers.Column) string {
 		return "types.BoolArray"
 	case "decimal", "numeric":
 		return "types.DecimalArray"
-	case "float", "double precision", "real":
+	case "float8", "float", "double precision", "real":
 		return "types.Float64Array"
 	default:
 		fmt.Fprintf(os.Stderr, "Warning: Unhandled array data type %s, falling back to types.StringArray\n", *c.ArrType)
