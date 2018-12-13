@@ -151,86 +151,88 @@ func (d *CockroachDBDriver) TableNames(schema string, whitelist, blacklist []str
 // and column types and returns those as a []Column after TranslateColumnType()
 // converts the SQL types to Go types, for example: "varchar" to "string"
 func (d *CockroachDBDriver) Columns(schema, tableName string, whitelist, blacklist []string) ([]drivers.Column, error) {
-	var columns []drivers.Column
+	makeQuery := func(dataTypeCol, whereClause string) string {
+		return fmt.Sprintf(`SELECT
+		DISTINCT
+		c.column_name,
+		c.ordinal_position,
+		max(%s) AS data_type,
+		max(c.column_default) AS column_default,
+		bool_or(
+			CASE
+			WHEN c.is_nullable = 'NO' THEN false
+			ELSE true
+			END
+		)
+			AS is_nullable,
+		bool_or(
+			CASE
+			WHEN pc.count < 2 AND pgc.contype IN ('p', 'u')
+			THEN true
+			ELSE false
+			END
+		)
+			AS is_unique
+	FROM
+		information_schema.columns AS c
+		LEFT JOIN
+			(
+				SELECT
+					DISTINCT
+					c.column_name,
+					pgc.conname AS conname,
+					pgc.contype AS contype
+				FROM
+					information_schema.columns AS c
+					LEFT JOIN
+						information_schema.key_column_usage
+							AS kcu
+					ON
+						c.table_name = kcu.table_name
+						AND c.table_schema = kcu.table_schema
+						AND c.column_name = kcu.column_name
+					LEFT JOIN pg_constraint AS pgc
+					ON kcu.constraint_name = pgc.conname
+				WHERE
+					c.table_schema = $1 AND c.table_name = $2
+			)
+				AS pgc
+		ON c.column_name = pgc.column_name
+		LEFT JOIN
+			(
+				SELECT
+					kcu.table_schema,
+					kcu.table_name,
+					kcu.constraint_name,
+					count(*)
+				FROM
+					information_schema.key_column_usage AS kcu
+				GROUP BY
+					kcu.table_schema,
+					kcu.table_name,
+					kcu.constraint_name
+			)
+				AS pc
+		ON
+			c.table_schema = pc.table_schema
+			AND c.table_name = pc.table_name
+			AND pgc.conname = pc.constraint_name
+	WHERE
+		c.table_schema = $1 AND c.table_name = $2 %s
+	GROUP BY
+		c.ordinal_position, c.column_name
+	ORDER BY
+		c.ordinal_position ASC;`, dataTypeCol, whereClause)
+	}
 
+	var columns []drivers.Column
 	args := []interface{}{schema, tableName}
 
-	query := `SELECT
-    DISTINCT
-    c.column_name,
-    c.ordinal_position,
-    max(c.data_type) AS data_type,
-    max(c.column_default) AS column_default,
-    bool_or(
-        CASE
-        WHEN c.is_nullable = 'NO' THEN false
-        ELSE true
-        END
-    )
-        AS is_nullable,
-    bool_or(
-        CASE
-        WHEN pc.count < 2 AND pgc.contype IN ('p', 'u')
-        THEN true
-        ELSE false
-        END
-    )
-        AS is_unique
-FROM
-    information_schema.columns AS c
-    LEFT JOIN
-        (
-            SELECT
-                DISTINCT
-                c.column_name,
-                pgc.conname AS conname,
-                pgc.contype AS contype
-            FROM
-                information_schema.columns AS c
-                LEFT JOIN
-                    information_schema.key_column_usage
-                        AS kcu
-                ON
-                    c.table_name = kcu.table_name
-                    AND c.table_schema = kcu.table_schema
-                    AND c.column_name = kcu.column_name
-                LEFT JOIN pg_constraint AS pgc
-                ON kcu.constraint_name = pgc.conname
-            WHERE
-                c.table_schema = $1 AND c.table_name = $2
-        )
-            AS pgc
-    ON c.column_name = pgc.column_name
-    LEFT JOIN
-        (
-            SELECT
-                kcu.table_schema,
-                kcu.table_name,
-                kcu.constraint_name,
-                count(*)
-            FROM
-                information_schema.key_column_usage AS kcu
-            GROUP BY
-                kcu.table_schema,
-                kcu.table_name,
-                kcu.constraint_name
-        )
-            AS pc
-    ON
-        c.table_schema = pc.table_schema
-        AND c.table_name = pc.table_name
-        AND pgc.conname = pc.constraint_name
-WHERE
-    c.table_schema = $1 AND c.table_name = $2
-GROUP BY
-    c.ordinal_position, c.column_name
-ORDER BY
-    c.ordinal_position ASC;`
-
+	var whereClause string
 	if len(whitelist) > 0 {
 		cols := drivers.ColumnsFromList(whitelist, tableName)
 		if len(cols) > 0 {
-			query += fmt.Sprintf(" and c.column_name in (%s)", strmangle.Placeholders(true, len(cols), 3, 1))
+			whereClause += fmt.Sprintf(" and c.column_name in (%s)", strmangle.Placeholders(true, len(cols), 3, 1))
 			for _, w := range cols {
 				args = append(args, w)
 			}
@@ -238,14 +240,24 @@ ORDER BY
 	} else if len(blacklist) > 0 {
 		cols := drivers.ColumnsFromList(blacklist, tableName)
 		if len(cols) > 0 {
-			query += fmt.Sprintf(" and c.column_name not in (%s)", strmangle.Placeholders(true, len(cols), 3, 1))
+			whereClause += fmt.Sprintf(" and c.column_name not in (%s)", strmangle.Placeholders(true, len(cols), 3, 1))
 			for _, w := range cols {
 				args = append(args, w)
 			}
 		}
 	}
 
-	rows, err := d.conn.Query(query, args...)
+	rows, err := d.conn.Query(makeQuery("c.crdb_sql_type", whereClause+` and c.is_hidden = 'NO'`), args...)
+	if err != nil {
+		// TODO(g.lerchundi): Remove this fallback logic post-2.2.
+		// Ref: https://github.com/cockroachdb/cockroach/pull/28945
+		if strings.Contains(err.Error(), "column \"crdb_sql_type\" does not exist") {
+			rows, err = d.conn.Query(makeQuery("c.data_type", whereClause+` and c.is_hidden = 'NO'`), args...)
+		}
+		if strings.Contains(err.Error(), "column \"is_hidden\" does not exist") {
+			rows, err = d.conn.Query(makeQuery("c.data_type", whereClause), args...)
+		}
+	}
 	if err != nil {
 		return nil, err
 	}
