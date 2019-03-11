@@ -11,6 +11,9 @@ type crdbTester struct {
   port    int
 
   testDBName string
+
+  testDBURL string
+  dbURL     string
 }
 
 func init() {
@@ -32,6 +35,9 @@ func (c *crdbTester) setup() error {
   // Create a randomized db name.
   c.testDBName = randomize.StableDBName(c.dbName)
 
+  c.testDBURL = buildQueryString(c.user, c.pass, c.testDBName, c.host, c.port, c.sslmode)
+  c.dbURL = buildQueryString(c.user, c.pass, c.dbName, c.host, c.port, c.sslmode)
+
   if err = c.dropTestDB(); err != nil {
     return err
   }
@@ -39,8 +45,8 @@ func (c *crdbTester) setup() error {
     return err
   }
 
-  dumpCmd := exec.Command("cockroach", "dump", c.dbName, "--insecure", "--dump-mode=schema")
-  createCmd := exec.Command("cockroach", "sql", "--database", c.testDBName, "--insecure")
+  dumpCmd := exec.Command("cockroach", "dump", c.dbName, "--url", c.dbURL, "--insecure", "--dump-mode=schema")
+  createCmd := exec.Command("cockroach", "sql", "--url", c.testDBURL, "--database", c.testDBName, "--insecure")
 
   r, w := io.Pipe()
   dumpCmd.Stdout = w
@@ -93,12 +99,12 @@ func (c *crdbTester) runCmd(stdin, command string, args ...string) error {
 
 func (c *crdbTester) createTestDB() error {
   stmt := fmt.Sprintf("CREATE DATABASE %s", c.testDBName)
-  return c.runCmd("", "cockroach", "sql", "--insecure", "--execute", stmt)
+  return c.runCmd("", "cockroach", "sql", "--url", c.testDBURL, "--insecure", "--execute", stmt)
 }
 
 func (c *crdbTester) dropTestDB() error {
   stmt := fmt.Sprintf("DROP DATABASE IF EXISTS %s CASCADE", c.testDBName)
-  return c.runCmd("", "cockroach", "sql", "--insecure", "--execute", stmt)
+  return c.runCmd("", "cockroach", "sql", "--url", c.testDBURL, "--insecure", "--execute", stmt)
 }
 
 // teardown executes cleanup tasks when the tests finish running
@@ -122,7 +128,7 @@ func (c *crdbTester) conn() (*sql.DB, error) {
   }
 
   var err error
-  c.dbConn, err = sql.Open("postgres", buildQueryString(c.user, c.pass, c.testDBName, c.host, c.port, c.sslmode))
+  c.dbConn, err = sql.Open("postgres", c.testDBURL)
   if err != nil {
     return nil, err
   }
