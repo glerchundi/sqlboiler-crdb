@@ -3,17 +3,30 @@ var rgxCDBFkey = regexp.MustCompile(`(?m)((\n)?.*CONSTRAINT.*?FOREIGN KEY.*?\n|(
 type crdbTester struct {
   dbConn *sql.DB
 
-  dbName  string
-  host    string
-  user    string
-  pass    string
-  sslmode string
-  port    int
+  dbName      string
+  host        string
+  user        string
+  pass        string
+  sslmode     string
+  sslcert     string
+  sslkey      string
+  sslrootcert string
+  port        int
 
-  testDBName string
+  testDBName  string
 
-  testDBURL string
-  dbURL     string
+  testDBURL   string
+  dbURL       string
+}
+
+func (c *crdbTester) insecureFlag() string {
+	var insecure string
+	if c.sslmode == "disable" {
+		insecure = "--insecure"
+	} else {
+		insecure = ""
+	}
+	return insecure
 }
 
 func init() {
@@ -32,11 +45,14 @@ func (c *crdbTester) setup() error {
   c.pass = viper.GetString("crdb.pass")
   c.port = viper.GetInt("crdb.port")
   c.sslmode = viper.GetString("crdb.sslmode")
+  c.sslcert = viper.GetString("crdb.sslcert")
+	c.sslkey = viper.GetString("crdb.sslkey")
+	c.sslrootcert = viper.GetString("crdb.sslrootcert")
   // Create a randomized db name.
   c.testDBName = randomize.StableDBName(c.dbName)
 
-  c.testDBURL = buildQueryString(c.user, c.pass, c.testDBName, c.host, c.port, c.sslmode)
-  c.dbURL = buildQueryString(c.user, c.pass, c.dbName, c.host, c.port, c.sslmode)
+ 	c.testDBURL = buildQueryString(c.user, c.pass, c.testDBName, c.host, c.port, c.sslmode, c.sslkey, c.sslcert, c.sslrootcert)
+	c.dbURL = buildQueryString(c.user, c.pass, c.dbName, c.host, c.port, c.sslmode, c.sslkey, c.sslcert, c.sslrootcert)
 
   if err = c.dropTestDB(); err != nil {
     return err
@@ -45,8 +61,15 @@ func (c *crdbTester) setup() error {
     return err
   }
 
-  dumpCmd := exec.Command("cockroach", "dump", c.dbName, "--url", c.dbURL, "--insecure", "--dump-mode=schema")
-  createCmd := exec.Command("cockroach", "sql", "--url", c.testDBURL, "--database", c.testDBName, "--insecure")
+	insecure := c.insecureFlag()
+  var dumpCmd, createCmd *exec.Cmd
+  if len(insecure) > 0{
+    dumpCmd = exec.Command("cockroach", "dump", c.dbName, "--url", c.dbURL, insecure, "--dump-mode=schema")
+    createCmd = exec.Command("cockroach", "sql", "--url", c.testDBURL, insecure, "--database", c.testDBName)
+  } else {
+    dumpCmd = exec.Command("cockroach", "dump", c.dbName, "--url", c.dbURL, "--dump-mode=schema")
+    createCmd = exec.Command("cockroach", "sql", "--url", c.testDBURL, "--database", c.testDBName)
+  }
 
   r, w := io.Pipe()
   dumpCmd.Stdout = w
@@ -98,13 +121,27 @@ func (c *crdbTester) runCmd(stdin, command string, args ...string) error {
 }
 
 func (c *crdbTester) createTestDB() error {
-  stmt := fmt.Sprintf("CREATE DATABASE %s", c.testDBName)
-  return c.runCmd("", "cockroach", "sql", "--url", c.testDBURL, "--insecure", "--execute", stmt)
+	insecure := c.insecureFlag()
+	stmt := fmt.Sprintf("CREATE DATABASE %s", c.testDBName)
+	var args []string
+	if len(insecure) > 0 {
+		args = []string{"sql", "--url", c.testDBURL, insecure, "--execute", stmt}
+	} else {
+		args = []string{"sql", "--url", c.testDBURL, "--execute", stmt}
+	}
+	return c.runCmd("", "cockroach", args...)
 }
 
 func (c *crdbTester) dropTestDB() error {
-  stmt := fmt.Sprintf("DROP DATABASE IF EXISTS %s CASCADE", c.testDBName)
-  return c.runCmd("", "cockroach", "sql", "--url", c.testDBURL, "--insecure", "--execute", stmt)
+	insecure := c.insecureFlag()
+	stmt := fmt.Sprintf("DROP DATABASE IF EXISTS %s CASCADE", c.testDBName)
+	var args []string
+	if len(insecure) > 0 {
+		args = []string{"sql", "--url", c.testDBURL, insecure, "--execute", stmt}
+	} else {
+		args = []string{"sql", "--url", c.testDBURL, "--execute", stmt}
+	}
+	return c.runCmd("", "cockroach", args...)
 }
 
 // teardown executes cleanup tasks when the tests finish running
@@ -136,7 +173,7 @@ func (c *crdbTester) conn() (*sql.DB, error) {
   return c.dbConn, nil
 }
 
-func buildQueryString(user, pass, dbname, host string, port int, sslmode string) string {
+func buildQueryString(user, pass, dbname, host string, port int, sslmode, sslkey, sslcert, sslrootcert string) string {
 	var up string
 	if user != "" {
 		up = user
@@ -144,6 +181,15 @@ func buildQueryString(user, pass, dbname, host string, port int, sslmode string)
 	if pass != "" {
 		up = fmt.Sprintf("%s:%s", up, pass)
 	}
-
-	return fmt.Sprintf("postgresql://%s@%s:%d/%s?sslmode=%s", up, host, port, dbname, sslmode)
+	output := fmt.Sprintf("postgresql://%s@%s:%d/%s?sslmode=%s", up, host, port, dbname, sslmode)
+	if len(sslcert) > 0 {
+		output += fmt.Sprintf("&sslcert=%s", sslcert)
+	}
+	if len(sslkey) > 0 {
+		output += fmt.Sprintf("&sslkey=%s", sslkey)
+	}
+	if len(sslrootcert) > 0 {
+		output += fmt.Sprintf("&sslrootcert=%s", sslrootcert)
+	}
+	return output
 }

@@ -63,13 +63,16 @@ func (d *CockroachDBDriver) Assemble(config drivers.Config) (dbinfo *drivers.DBI
 	host := config.MustString(drivers.ConfigHost)
 	port := config.DefaultInt(drivers.ConfigPort, 26257)
 	sslmode := config.DefaultString(drivers.ConfigSSLMode, "disable")
+	sslkey := config.DefaultString("sslkey", "")           // TODO add drivers.ConfigSSLKEY to upstream interface(?)
+	sslcert := config.DefaultString("sslcert", "")         // TODO add drivers.ConfigSSLCERT to upstream interface(?)
+	sslrootcert := config.DefaultString("sslrootcert", "") // TODO add drivers.ConfigSSLROOTCERT to upstream interface(?)
 	schema := config.DefaultString(drivers.ConfigSchema, "public")
 	whitelist, _ := config.StringSlice(drivers.ConfigWhitelist)
 	blacklist, _ := config.StringSlice(drivers.ConfigBlacklist)
 
 	useSchema := schema != "public"
 
-	d.connStr = buildQueryString(user, pass, dbname, host, port, sslmode)
+	d.connStr = buildQueryString(user, pass, dbname, host, port, sslmode, sslkey, sslcert, sslrootcert)
 	d.conn, err = sql.Open("postgres", d.connStr)
 	if err != nil {
 		return nil, errors.Wrap(err, "sqlboiler-crdb failed to connect to database")
@@ -660,7 +663,7 @@ func (d *CockroachDBDriver) Imports() (importers.Collection, error) {
 	return col, nil
 }
 
-func buildQueryString(user, pass, dbname, host string, port int, sslmode string) string {
+func buildQueryString(user, pass, dbname, host string, port int, sslmode, sslkey, sslcert, sslrootcert string) string {
 	var up string
 	if user != "" {
 		up = user
@@ -668,6 +671,15 @@ func buildQueryString(user, pass, dbname, host string, port int, sslmode string)
 	if pass != "" {
 		up = fmt.Sprintf("%s:%s", up, pass)
 	}
-
-	return fmt.Sprintf("postgresql://%s@%s:%d/%s?sslmode=%s", up, host, port, dbname, sslmode)
+	output := fmt.Sprintf("postgresql://%s@%s:%d/%s?sslmode=%s", up, host, port, dbname, sslmode)
+	if len(sslcert) > 0 {
+		output += fmt.Sprintf("&sslcert=%s", sslcert)
+	}
+	if len(sslkey) > 0 {
+		output += fmt.Sprintf("&sslkey=%s", sslkey)
+	}
+	if len(sslrootcert) > 0 {
+		output += fmt.Sprintf("&sslrootcert=%s", sslrootcert)
+	}
+	return output
 }

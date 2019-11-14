@@ -18,6 +18,12 @@ host="localhost"
 port=26257
 dbname="mydatabase"
 sslmode="disable"
+
+or optionally with secure connection
+#sslmode="verify-full"
+#sslkey="path to key"
+#sslcert="path to certificate"
+#sslrootcert="path to root certificate"
 ```
 
 **Notes**:
