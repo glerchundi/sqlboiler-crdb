@@ -39,6 +39,17 @@ func TestAssemble(t *testing.T) {
 	out := &bytes.Buffer{}
 	port, _ := strconv.Atoi(envPort)
 	url := buildQueryString(envUsername, envPassword, envDatabase, envHostname, port, "disable")
+
+	initDB := exec.Command("cockroach", "sql", "--url", url, "-e", "CREATE DATABASE IF NOT EXISTS "+envDatabase)
+	initDB.Stdout = out
+	initDB.Stderr = out
+	if err := initDB.Run(); err != nil {
+		t.Logf("cockroach output:\n%s\n", out.Bytes())
+		t.Fatal(err)
+	}
+	t.Logf("cockroach output:\n%s\n", out.Bytes())
+	out.Reset()
+
 	createDB := exec.Command("cockroach", "sql", "--url", url)
 	createDB.Stdout = out
 	createDB.Stderr = out

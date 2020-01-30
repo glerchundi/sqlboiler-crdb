@@ -1,4 +1,5 @@
 # sqlboiler-crdb
+[![Build Status](https://travis-ci.org/glerchundi/sqlboiler-crdb.svg?branch=master)](https://travis-ci.org/glerchundi/sqlboiler-crdb)
 
 ## Installation
 
