@@ -2,7 +2,7 @@ package main
 
 import (
 	"github.com/glerchundi/sqlboiler-crdb/driver"
-	"github.com/volatiletech/sqlboiler/drivers"
+	"github.com/volatiletech/sqlboiler/v4/drivers"
 )
 
 func main() {
