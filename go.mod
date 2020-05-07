@@ -1,4 +1,4 @@
-module github.com/glerchundi/sqlboiler-crdb
+module github.com/glerchundi/sqlboiler-crdb/v4
 
 go 1.13
 
