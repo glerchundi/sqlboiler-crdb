@@ -272,6 +272,13 @@ func (d *CockroachDBDriver) Columns(schema, tableName string, whitelist, blackli
 			return nil, errors.Wrapf(err, "unable to scan for table %s", tableName)
 		}
 
+		// To prevent marking nullable columns as not having a default value
+		// Techinically, every nullable column is "DEFAULT NULL"
+		if nullable && defaultValue == nil {
+			null := "NULL"
+			defaultValue = &null
+		}
+
 		// TODO(glerchundi): find a better way to infer this.
 		dbType := strings.ToLower(re.ReplaceAllString(colType, ""))
 		tmp := strings.Replace(dbType, "[]", "", 1)
