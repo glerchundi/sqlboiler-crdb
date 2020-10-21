@@ -27,10 +27,16 @@ func Assemble(config drivers.Config) (dbinfo *drivers.DBInfo, err error) {
 
 // CockroachDBDriver holds the database connection string and a handle
 // to the database connection.
-type CockroachDBDriver struct {
-	connStr string
-	conn    *sql.DB
-}
+type (
+	CockroachDBDriver struct {
+		connStr string
+		conn    *sql.DB
+	}
+	enumType struct {
+		name   string
+		values []string
+	}
+)
 
 // Templates that should be added/overridden
 func (d *CockroachDBDriver) Templates() (map[string]string, error) {
@@ -254,7 +260,7 @@ func (d *CockroachDBDriver) Columns(schema, tableName string, whitelist, blackli
 		if strings.Contains(err.Error(), "column \"crdb_sql_type\" does not exist") {
 			rows, err = d.conn.Query(makeQuery("c.data_type", whereClause+` and c.is_hidden = 'NO'`), args...)
 		}
-		if strings.Contains(err.Error(), "column \"is_hidden\" does not exist") {
+		if err != nil && strings.Contains(err.Error(), "column \"is_hidden\" does not exist") {
 			rows, err = d.conn.Query(makeQuery("c.data_type", whereClause), args...)
 		}
 	}
@@ -262,6 +268,11 @@ func (d *CockroachDBDriver) Columns(schema, tableName string, whitelist, blackli
 		return nil, err
 	}
 	defer rows.Close()
+
+	enums, err := d.enumTypes(schema)
+	if err != nil {
+		return nil, err
+	}
 
 	for rows.Next() {
 		var colName, colType, udtName string
@@ -287,6 +298,18 @@ func (d *CockroachDBDriver) Columns(schema, tableName string, whitelist, blackli
 			dbType = "array"
 		}
 
+		// Check if type is an ENUM
+		if enums != nil && strings.Contains(dbType, ".") {
+			parts := strings.Split(dbType, ".")
+			if len(parts) == 2 && parts[0] == schema {
+				for _, enum := range enums {
+					if enum.name == parts[1] {
+						dbType = enum.String()
+					}
+				}
+			}
+		}
+
 		column := drivers.Column{
 			Name:     colName,
 			DBType:   dbType,
@@ -303,6 +326,34 @@ func (d *CockroachDBDriver) Columns(schema, tableName string, whitelist, blackli
 	}
 
 	return columns, nil
+}
+
+func (d *CockroachDBDriver) enumTypes(schema string) ([]enumType, error) {
+	var enums []enumType
+
+	rows, err := d.conn.Query("SHOW ENUMS")
+	if err != nil {
+		if strings.Contains(err.Error(), `unrecognized configuration parameter "enums"`) {
+			return enums, nil // if CockroachDB < v20.2 - return empty slice
+		}
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var enumSchema, enumName, enumValues string
+		if err := rows.Scan(&enumSchema, &enumName, &enumValues); err != nil {
+			return nil, errors.Wrap(err, "failed to scan enum types")
+		}
+		if schema == enumSchema {
+			enums = append(enums, enumType{
+				name:   enumName,
+				values: strings.Split(enumValues, "|"), // will not split properly if enum values contain | characters
+			})
+		}
+	}
+
+	return enums, nil
 }
 
 // PrimaryKeyInfo looks up the primary key for a table.
@@ -469,7 +520,9 @@ func (d *CockroachDBDriver) TranslateColumnType(c drivers.Column) drivers.Column
 			// Make DBType something like ARRAYinteger for parsing with randomize.Struct
 			c.DBType = strings.ToUpper(c.DBType) + *c.ArrType
 		default:
-			fmt.Fprintf(os.Stderr, "Warning: Unhandled nullable data type %s, falling back to null.String\n", c.DBType)
+			if !isEnumDBType(c.DBType) {
+				fmt.Fprintf(os.Stderr, "Warning: Unhandled nullable data type %s, falling back to null.String\n", c.DBType)
+			}
 			c.Type = "null.String"
 		}
 	} else {
@@ -506,7 +559,9 @@ func (d *CockroachDBDriver) TranslateColumnType(c drivers.Column) drivers.Column
 			// Make DBType something like ARRAYinteger for parsing with randomize.Struct
 			c.DBType = strings.ToUpper(c.DBType) + *c.ArrType
 		default:
-			fmt.Fprintf(os.Stderr, "Warning: Unhandled data type %s, falling back to string\n", c.DBType)
+			if !isEnumDBType(c.DBType) {
+				fmt.Fprintf(os.Stderr, "Warning: Unhandled data type %s, falling back to string\n", c.DBType)
+			}
 			c.Type = "string"
 		}
 	}
@@ -677,4 +732,13 @@ func buildQueryString(user, pass, dbname, host string, port int, sslmode string)
 	}
 
 	return fmt.Sprintf("postgresql://%s@%s:%d/%s?sslmode=%s", up, host, port, dbname, sslmode)
+}
+
+func (e enumType) String() string {
+	// format understandable to drivers.FilterColumnsByEnum, strmangle.ParseEnumName and strmangle.ParseEnumVals
+	return fmt.Sprintf("enum.%s('%s')", e.name, strings.Join(e.values, "','"))
+}
+
+func isEnumDBType(dbType string) bool {
+	return strings.HasPrefix(dbType, "enum.")
 }

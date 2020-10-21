@@ -8,6 +8,9 @@ drop table if exists posts;
 drop table if exists users;
 drop table if exists type_monsters;
 
+drop type if exists workday;
+create type workday as enum('monday', 'tuesday', 'wednesday', 'thursday', 'friday');
+
 create table users (
 	id serial primary key not null
 );
@@ -57,6 +60,8 @@ create table video_tags (
 
 create table type_monsters (
 	id serial primary key not null,
+
+    enum_use    workday not null,
 
 	bool_zero   bool,
 	bool_one    bool null,
