@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 
 	_ "github.com/lib/pq" // Side-effect import sql driver
@@ -341,9 +342,22 @@ func (d *CockroachDBDriver) enumTypes(schema string) ([]enumType, error) {
 	defer rows.Close()
 
 	for rows.Next() {
-		var enumSchema, enumName, enumValues string
-		if err := rows.Scan(&enumSchema, &enumName, &enumValues); err != nil {
-			return nil, errors.Wrap(err, "failed to scan enum types")
+		columns, err := rows.Columns()
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to return enums table column names")
+		}
+		var enumSchema, enumName, enumValues, enumOwner string
+		switch len(columns) {
+		case 4: // >= v20.2.2 (has owner column)
+			if err := rows.Scan(&enumSchema, &enumName, &enumValues, &enumOwner); err != nil {
+				return nil, errors.Wrap(err, "failed to scan enum types")
+			}
+		case 3: // < v20.2.2
+			if err := rows.Scan(&enumSchema, &enumName, &enumValues); err != nil {
+				return nil, errors.Wrap(err, "failed to scan enum types")
+			}
+		default:
+			return nil, errors.New("unexpected number of columns in enums table: " + strconv.Itoa(len(columns)))
 		}
 		if schema == enumSchema {
 			enums = append(enums, enumType{
