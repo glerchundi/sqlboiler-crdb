@@ -14,6 +14,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/volatiletech/sqlboiler/v4/drivers"
 	"github.com/volatiletech/sqlboiler/v4/importers"
+	"github.com/volatiletech/sqlboiler/v4/types"
 	"github.com/volatiletech/strmangle"
 )
 
@@ -346,7 +347,9 @@ func (d *CockroachDBDriver) enumTypes(schema string) ([]enumType, error) {
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to return enums table column names")
 		}
-		var enumSchema, enumName, enumValues, enumOwner string
+
+		var enumSchema, enumName, enumOwner string
+		var enumValues sql.NullString
 		switch len(columns) {
 		case 4: // >= v20.2.2 (has owner column)
 			if err := rows.Scan(&enumSchema, &enumName, &enumValues, &enumOwner); err != nil {
@@ -360,10 +363,25 @@ func (d *CockroachDBDriver) enumTypes(schema string) ([]enumType, error) {
 			return nil, errors.New("unexpected number of columns in enums table: " + strconv.Itoa(len(columns)))
 		}
 		if schema == enumSchema {
-			enums = append(enums, enumType{
-				name:   enumName,
-				values: strings.Split(enumValues, "|"), // will not split properly if enum values contain | characters
-			})
+			eType := enumType{
+				name: enumName,
+			}
+			if enumValues.Valid {
+				if enumValues.String[0] == '{' && enumValues.String[len(enumValues.String)-1:] == "}" {
+					// >= v21.1.0 - "{a,b,c}"
+					var values types.StringArray
+					if err := values.Scan(enumValues.String); err != nil {
+						return nil, errors.New(fmt.Sprintf("failed to scan enum values to array: %v", enumValues.String))
+					}
+					eType.values = values
+				} else {
+					// < v21.1.0 - "a|b|c"
+					eType.values = strings.Split(enumValues.String, "|") // will not split properly if enum values contain | characters
+				}
+			} else { // enum type created without values
+				eType.values = nil
+			}
+			enums = append(enums, eType)
 		}
 	}
 
