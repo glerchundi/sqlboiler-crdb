@@ -1,4 +1,4 @@
-var rgxCDBFkey = regexp.MustCompile(`(?m)((\n)?.*CONSTRAINT.*?FOREIGN KEY.*?\n|(\n)?[a-zA-Z _]*VALIDATE CONSTRAINT.*?.*?\n)`)
+var rgxCDBFkey = regexp.MustCompile(`(?m)((\n)?.*CONSTRAINT.*?FOREIGN KEY.*?\n|(\n)?[a-zA-Z _\.]*VALIDATE CONSTRAINT.*?.*?\n)`)
 
 type crdbTester struct {
   dbConn *sql.DB
