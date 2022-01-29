@@ -1,10 +1,11 @@
-//go:generate go-bindata -nometadata -pkg driver -prefix override override/...
 package driver
 
 import (
 	"database/sql"
+	"embed"
 	"encoding/base64"
 	"fmt"
+	"io/fs"
 	"os"
 	"regexp"
 	"strconv"
@@ -17,6 +18,9 @@ import (
 	"github.com/volatiletech/sqlboiler/v4/types"
 	"github.com/volatiletech/strmangle"
 )
+
+//go:embed override
+var templates embed.FS
 
 var re = regexp.MustCompile(`\(([^\)]+)\)`)
 
@@ -31,8 +35,10 @@ func Assemble(config drivers.Config) (dbinfo *drivers.DBInfo, err error) {
 // to the database connection.
 type (
 	CockroachDBDriver struct {
-		connStr string
-		conn    *sql.DB
+		connStr        string
+		conn           *sql.DB
+		addEnumTypes   bool
+		enumNullPrefix string
 	}
 	enumType struct {
 		name   string
@@ -42,15 +48,26 @@ type (
 
 // Templates that should be added/overridden
 func (d *CockroachDBDriver) Templates() (map[string]string, error) {
-	names := AssetNames()
 	tpls := make(map[string]string)
-	for _, n := range names {
-		b, err := Asset(n)
+	err := fs.WalkDir(templates, "override", func(path string, de fs.DirEntry, err error) error {
 		if err != nil {
-			return nil, err
+			return err
 		}
 
-		tpls[n] = base64.StdEncoding.EncodeToString(b)
+		if de.IsDir() {
+			return nil
+		}
+
+		b, err := fs.ReadFile(templates, path)
+		if err != nil {
+			return err
+		}
+		tpls[strings.Replace(path, "override/", "", 1)] = base64.StdEncoding.EncodeToString(b)
+
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	return tpls, nil
@@ -74,9 +91,10 @@ func (d *CockroachDBDriver) Assemble(config drivers.Config) (dbinfo *drivers.DBI
 	schema := config.DefaultString(drivers.ConfigSchema, "public")
 	whitelist, _ := config.StringSlice(drivers.ConfigWhitelist)
 	blacklist, _ := config.StringSlice(drivers.ConfigBlacklist)
-
 	useSchema := schema != "public"
 
+	d.addEnumTypes, _ = config[drivers.ConfigAddEnumTypes].(bool)
+	d.enumNullPrefix = strmangle.TitleCase(config.DefaultString(drivers.ConfigEnumNullPrefix, "Null"))
 	d.connStr = buildQueryString(user, pass, dbname, host, port, sslmode)
 	d.conn, err = sql.Open("postgres", d.connStr)
 	if err != nil {
@@ -552,10 +570,16 @@ func (d *CockroachDBDriver) TranslateColumnType(c drivers.Column) drivers.Column
 			// Make DBType something like ARRAYinteger for parsing with randomize.Struct
 			c.DBType = strings.ToUpper(c.DBType) + *c.ArrType
 		default:
-			if !isEnumDBType(c.DBType) {
+			if enumName := strmangle.ParseEnumName(c.DBType); enumName != "" {
+				if d.addEnumTypes {
+					c.Type = d.enumNullPrefix + strmangle.TitleCase(enumName)
+				} else {
+					c.Type = "null.String"
+				}
+			} else {
 				fmt.Fprintf(os.Stderr, "Warning: Unhandled nullable data type %s, falling back to null.String\n", c.DBType)
+				c.Type = "null.String"
 			}
-			c.Type = "null.String"
 		}
 	} else {
 		switch c.DBType {
@@ -591,10 +615,16 @@ func (d *CockroachDBDriver) TranslateColumnType(c drivers.Column) drivers.Column
 			// Make DBType something like ARRAYinteger for parsing with randomize.Struct
 			c.DBType = strings.ToUpper(c.DBType) + *c.ArrType
 		default:
-			if !isEnumDBType(c.DBType) {
+			if enumName := strmangle.ParseEnumName(c.DBType); enumName != "" {
+				if d.addEnumTypes {
+					c.Type = strmangle.TitleCase(enumName)
+				} else {
+					c.Type = "string"
+				}
+			} else {
 				fmt.Fprintf(os.Stderr, "Warning: Unhandled data type %s, falling back to string\n", c.DBType)
+				c.Type = "string"
 			}
-			c.Type = "string"
 		}
 	}
 	return c
@@ -769,8 +799,4 @@ func buildQueryString(user, pass, dbname, host string, port int, sslmode string)
 func (e enumType) String() string {
 	// format understandable to drivers.FilterColumnsByEnum, strmangle.ParseEnumName and strmangle.ParseEnumVals
 	return fmt.Sprintf("enum.%s('%s')", e.name, strings.Join(e.values, "','"))
-}
-
-func isEnumDBType(dbType string) bool {
-	return strings.HasPrefix(dbType, "enum.")
 }

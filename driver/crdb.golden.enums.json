@@ -273,7 +273,7 @@
         },
         {
           "name": "enum_use",
-          "type": "string",
+          "type": "Workday",
           "db_type": "enum.workday('monday','tuesday','wednesday','thursday','friday')",
           "default": "",
           "comment": "",
@@ -288,7 +288,7 @@
         },
         {
           "name": "enum_nullable",
-          "type": "null.String",
+          "type": "NullWorkday",
           "db_type": "enum.workday('monday','tuesday','wednesday','thursday','friday')",
           "default": "NULL",
           "comment": "",

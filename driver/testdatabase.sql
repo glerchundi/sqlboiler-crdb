@@ -37,7 +37,7 @@ create table sponsors (
 
 create table videos (
 	id serial primary key not null,
-	
+
 	user_id int not null,
 	sponsor_id int unique,
 
@@ -61,7 +61,8 @@ create table video_tags (
 create table type_monsters (
 	id serial primary key not null,
 
-    enum_use    workday not null,
+    enum_use        workday not null,
+    enum_nullable   workday,
 
 	bool_zero   bool,
 	bool_one    bool null,
