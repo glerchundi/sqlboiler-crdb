@@ -134,12 +134,12 @@ func (d *CockroachDBDriver) Assemble(config drivers.Config) (dbinfo *drivers.DBI
 func (d *CockroachDBDriver) TableNames(schema string, whitelist, blacklist []string) ([]string, error) {
 	var names []string
 
-	query := fmt.Sprintf(`select table_name from information_schema.tables where table_schema = $1`)
+	query := fmt.Sprintf(`SELECT table_name FROM information_schema.tables WHERE table_schema = $1 AND table_type = 'BASE TABLE'`)
 	args := []interface{}{schema}
 	if len(whitelist) > 0 {
 		tables := drivers.TablesFromList(whitelist)
 		if len(tables) > 0 {
-			query += fmt.Sprintf(" and table_name in (%s);", strmangle.Placeholders(true, len(tables), 2, 1))
+			query += fmt.Sprintf(" AND table_name IN (%s);", strmangle.Placeholders(true, len(tables), 2, 1))
 			for _, w := range tables {
 				args = append(args, w)
 			}
@@ -147,7 +147,7 @@ func (d *CockroachDBDriver) TableNames(schema string, whitelist, blacklist []str
 	} else if len(blacklist) > 0 {
 		tables := drivers.TablesFromList(blacklist)
 		if len(tables) > 0 {
-			query += fmt.Sprintf(" and table_name not in (%s);", strmangle.Placeholders(true, len(tables), 2, 1))
+			query += fmt.Sprintf(" AND table_name NOT IN (%s);", strmangle.Placeholders(true, len(tables), 2, 1))
 			for _, b := range tables {
 				args = append(args, b)
 			}
@@ -258,7 +258,7 @@ func (d *CockroachDBDriver) Columns(schema, tableName string, whitelist, blackli
 	if len(whitelist) > 0 {
 		cols := drivers.ColumnsFromList(whitelist, tableName)
 		if len(cols) > 0 {
-			whereClause += fmt.Sprintf(" and c.column_name in (%s)", strmangle.Placeholders(true, len(cols), 3, 1))
+			whereClause += fmt.Sprintf(" AND c.column_name IN (%s)", strmangle.Placeholders(true, len(cols), 3, 1))
 			for _, w := range cols {
 				args = append(args, w)
 			}
@@ -266,19 +266,19 @@ func (d *CockroachDBDriver) Columns(schema, tableName string, whitelist, blackli
 	} else if len(blacklist) > 0 {
 		cols := drivers.ColumnsFromList(blacklist, tableName)
 		if len(cols) > 0 {
-			whereClause += fmt.Sprintf(" and c.column_name not in (%s)", strmangle.Placeholders(true, len(cols), 3, 1))
+			whereClause += fmt.Sprintf(" AND c.column_name NOT IN (%s)", strmangle.Placeholders(true, len(cols), 3, 1))
 			for _, w := range cols {
 				args = append(args, w)
 			}
 		}
 	}
 
-	rows, err := d.conn.Query(makeQuery("c.crdb_sql_type", whereClause+` and c.is_hidden = 'NO'`), args...)
+	rows, err := d.conn.Query(makeQuery("c.crdb_sql_type", whereClause+` AND c.is_hidden = 'NO'`), args...)
 	if err != nil {
 		// TODO(g.lerchundi): Remove this fallback logic post-2.2.
 		// Ref: https://github.com/cockroachdb/cockroach/pull/28945
 		if strings.Contains(err.Error(), "column \"crdb_sql_type\" does not exist") {
-			rows, err = d.conn.Query(makeQuery("c.data_type", whereClause+` and c.is_hidden = 'NO'`), args...)
+			rows, err = d.conn.Query(makeQuery("c.data_type", whereClause+` AND c.is_hidden = 'NO'`), args...)
 		}
 		if err != nil && strings.Contains(err.Error(), "column \"is_hidden\" does not exist") {
 			rows, err = d.conn.Query(makeQuery("c.data_type", whereClause), args...)
@@ -628,6 +628,83 @@ func (d *CockroachDBDriver) TranslateColumnType(c drivers.Column) drivers.Column
 		}
 	}
 	return c
+}
+
+// ViewNames connects to the postgres database and
+// retrieves all view names from the information_schema where the
+// view schema is schema. It uses a whitelist and blacklist.
+func (d *CockroachDBDriver) ViewNames(schema string, whitelist, blacklist []string) ([]string, error) {
+	var names []string
+
+	query := `SELECT table_name FROM information_schema.views WHERE table_schema = $1`
+	args := []interface{}{schema}
+	if len(whitelist) > 0 {
+		views := drivers.TablesFromList(whitelist)
+		if len(views) > 0 {
+			query += fmt.Sprintf(" AND table_name IN (%s)", strmangle.Placeholders(true, len(views), 2, 1))
+			for _, w := range views {
+				args = append(args, w)
+			}
+		}
+	} else if len(blacklist) > 0 {
+		views := drivers.TablesFromList(blacklist)
+		if len(views) > 0 {
+			query += fmt.Sprintf(" AND table_name NOT IN (%s)", strmangle.Placeholders(true, len(views), 2, 1))
+			for _, b := range views {
+				args = append(args, b)
+			}
+		}
+	}
+
+	query += ` order by table_name;`
+
+	rows, err := d.conn.Query(query, args...)
+
+	if err != nil {
+		return nil, err
+	}
+
+	defer rows.Close()
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return nil, err
+		}
+
+		names = append(names, name)
+	}
+
+	return names, nil
+}
+
+// ViewCapabilities return what actions are allowed for a view.
+func (d *CockroachDBDriver) ViewCapabilities(schema, name string) (drivers.ViewCapabilities, error) {
+	capabilities := drivers.ViewCapabilities{}
+
+	query := `select
+	is_insertable_into = 'YES',
+	is_updatable = 'YES',
+	is_trigger_insertable_into = 'YES',
+	is_trigger_updatable = 'YES',
+	is_trigger_deletable = 'YES'
+	from information_schema.views where table_schema = $1 and table_name = $2
+	order by table_name;`
+
+	row := d.conn.QueryRow(query, schema, name)
+
+	var insertable, updatable, trInsert, trUpdate, trDelete bool
+	if err := row.Scan(&insertable, &updatable, &trInsert, &trUpdate, &trDelete); err != nil {
+		return capabilities, err
+	}
+
+	capabilities.CanInsert = insertable || trInsert
+	capabilities.CanUpsert = insertable && updatable
+
+	return capabilities, nil
+}
+
+func (d *CockroachDBDriver) ViewColumns(schema, tableName string, whitelist, blacklist []string) ([]drivers.Column, error) {
+	return d.Columns(schema, tableName, whitelist, blacklist)
 }
 
 // getArrayType returns the correct boil.Array type for each database type

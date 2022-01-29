@@ -1172,21 +1172,6 @@
           "full_db_type": ""
         },
         {
-          "name": "float_ten",
-          "type": "null.Float64",
-          "db_type": "float8",
-          "default": "NULL",
-          "comment": "",
-          "nullable": true,
-          "unique": false,
-          "validated": false,
-          "auto_generated": false,
-          "arr_type": null,
-          "udt_name": "",
-          "domain_name": null,
-          "full_db_type": ""
-        },
-        {
           "name": "bytea_zero",
           "type": "null.Bytes",
           "db_type": "bytes",
@@ -1457,7 +1442,7 @@
           "full_db_type": ""
         },
         {
-          "name": "time_ten",
+          "name": "time_nine",
           "type": "null.Time",
           "db_type": "date",
           "default": "NULL",
@@ -1472,7 +1457,7 @@
           "full_db_type": ""
         },
         {
-          "name": "time_eleven",
+          "name": "time_ten",
           "type": "time.Time",
           "db_type": "date",
           "default": "",
@@ -1487,7 +1472,7 @@
           "full_db_type": ""
         },
         {
-          "name": "time_twelve",
+          "name": "time_eleven",
           "type": "null.Time",
           "db_type": "date",
           "default": "'1999-01-08':::DATE",
@@ -1502,7 +1487,7 @@
           "full_db_type": ""
         },
         {
-          "name": "time_thirteen",
+          "name": "time_twelve",
           "type": "time.Time",
           "db_type": "date",
           "default": "'1999-01-08':::DATE",
@@ -1965,6 +1950,51 @@
           "udt_name": "",
           "domain_name": null,
           "full_db_type": ""
+        },
+        {
+          "name": "base",
+          "type": "null.String",
+          "db_type": "string",
+          "default": "NULL",
+          "comment": "",
+          "nullable": true,
+          "unique": false,
+          "validated": false,
+          "auto_generated": false,
+          "arr_type": null,
+          "udt_name": "",
+          "domain_name": null,
+          "full_db_type": ""
+        },
+        {
+          "name": "generated_nnull",
+          "type": "string",
+          "db_type": "string",
+          "default": "",
+          "comment": "",
+          "nullable": false,
+          "unique": false,
+          "validated": false,
+          "auto_generated": false,
+          "arr_type": null,
+          "udt_name": "",
+          "domain_name": null,
+          "full_db_type": ""
+        },
+        {
+          "name": "generated_null",
+          "type": "null.String",
+          "db_type": "string",
+          "default": "NULL",
+          "comment": "",
+          "nullable": true,
+          "unique": false,
+          "validated": false,
+          "auto_generated": false,
+          "arr_type": null,
+          "udt_name": "",
+          "domain_name": null,
+          "full_db_type": ""
         }
       ],
       "p_key": {
@@ -2243,6 +2273,67 @@
         }
       ],
       "is_view": false,
+      "view_capabilities": {
+        "can_insert": false,
+        "can_upsert": false
+      }
+    },
+    {
+      "name": "user_videos",
+      "schema_name": "",
+      "columns": [
+        {
+          "name": "user_id",
+          "type": "null.Int64",
+          "db_type": "int8",
+          "default": "NULL",
+          "comment": "",
+          "nullable": true,
+          "unique": false,
+          "validated": false,
+          "auto_generated": false,
+          "arr_type": null,
+          "udt_name": "",
+          "domain_name": null,
+          "full_db_type": ""
+        },
+        {
+          "name": "video_id",
+          "type": "null.Int64",
+          "db_type": "int8",
+          "default": "NULL",
+          "comment": "",
+          "nullable": true,
+          "unique": false,
+          "validated": false,
+          "auto_generated": false,
+          "arr_type": null,
+          "udt_name": "",
+          "domain_name": null,
+          "full_db_type": ""
+        },
+        {
+          "name": "sponsor_id",
+          "type": "null.Int64",
+          "db_type": "int8",
+          "default": "NULL",
+          "comment": "",
+          "nullable": true,
+          "unique": false,
+          "validated": false,
+          "auto_generated": false,
+          "arr_type": null,
+          "udt_name": "",
+          "domain_name": null,
+          "full_db_type": ""
+        }
+      ],
+      "p_key": null,
+      "f_keys": null,
+      "is_join_table": false,
+      "to_one_relationships": null,
+      "to_many_relationships": null,
+      "is_view": true,
       "view_capabilities": {
         "can_insert": false,
         "can_upsert": false
