@@ -46,3 +46,4 @@ func test{{$alias.UpPlural}}Upsert(t *testing.T) {
 		t.Error("want one record, got:", count)
 	}
 }
+
