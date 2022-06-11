@@ -25,7 +25,3 @@ sslmode="disable"
 Although, and in order to avoid confussion, major version appears in the import path.
 * Cockroach 2.x and greater are supported, no plans to add support for previous versions.
 * Code generation against secure clusters is not tested yet.
-
-## Development
-
-This does use go-bindata (be sure to use the latest version of [kevin burke's fork](https://github.com/kevinburke/go-bindata)) to embed templates into the binary. You can run go-generate in the driver folder to re-gen the bindata after modifying templates. Other than that go build should be able to be used to build the binary.

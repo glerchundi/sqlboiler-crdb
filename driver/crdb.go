@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/glerchundi/sqlboiler-crdb/v4/driver/override"
 	_ "github.com/lib/pq" // Side-effect import sql driver
 	"github.com/pkg/errors"
 	"github.com/volatiletech/sqlboiler/v4/drivers"
@@ -34,10 +35,13 @@ type CockroachDBDriver struct {
 
 // Templates that should be added/overridden
 func (d *CockroachDBDriver) Templates() (map[string]string, error) {
-	names := AssetNames()
+	names, err := override.TemplateFilenames()
+	if err != nil {
+		return nil, err
+	}
 	tpls := make(map[string]string)
 	for _, n := range names {
-		b, err := Asset(n)
+		b, err := override.Template(n)
 		if err != nil {
 			return nil, err
 		}
