@@ -1,11 +1,15 @@
 # sqlboiler-crdb
 
+## Original Source
+
+This is a fork from https://github.com/glerchundi/sqlboiler-crdb. We, the Infratographer community, plan to maintain this fork and keep it active.
+
 ## Installation
 
 Installation is simple, just use go get. Once the binary is in your path sqlboiler will be able to use it if you run it with the driver name `crdb`.
 ```
 # Install sqlboiler crdb driver
-go get -u github.com/glerchundi/sqlboiler-crdb/v4
+go get -u github.com/infratographer/sqlboiler-crdb/v4
 # Generate models
 sqlboiler crdb
 ```

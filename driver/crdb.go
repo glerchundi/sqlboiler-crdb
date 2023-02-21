@@ -9,7 +9,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/glerchundi/sqlboiler-crdb/v4/driver/override"
+	"github.com/infratographer/sqlboiler-crdb/v4/driver/override"
 	_ "github.com/lib/pq" // Side-effect import sql driver
 	"github.com/pkg/errors"
 	"github.com/volatiletech/sqlboiler/v4/drivers"
