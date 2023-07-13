@@ -2,7 +2,7 @@
 
 ## Original Source
 
-This is a fork from https://github.com/glerchundi/sqlboiler-crdb. We, the Infratographer community, plan to maintain this fork and keep it active.
+This is a fork from https://github.com/glerchundi/sqlboiler-crdb. We, the Metal Toolbox community, plan to maintain this fork and keep it active.
 
 ## Installation
 
