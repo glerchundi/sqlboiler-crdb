@@ -4,6 +4,7 @@ package driver
 import (
 	"database/sql"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"os"
 	"regexp"
@@ -11,7 +12,6 @@ import (
 
 	"github.com/glerchundi/sqlboiler-crdb/v4/driver/override"
 	_ "github.com/lib/pq" // Side-effect import sql driver
-	"github.com/pkg/errors"
 	"github.com/volatiletech/sqlboiler/v4/drivers"
 	"github.com/volatiletech/sqlboiler/v4/importers"
 	"github.com/volatiletech/strmangle"
@@ -76,7 +76,7 @@ func (d *CockroachDBDriver) Assemble(config drivers.Config) (dbinfo *drivers.DBI
 	d.connStr = buildQueryString(user, pass, dbname, host, port, sslmode)
 	d.conn, err = sql.Open("postgres", d.connStr)
 	if err != nil {
-		return nil, errors.Wrap(err, "sqlboiler-crdb failed to connect to database")
+		return nil, fmt.Errorf("sqlboiler-crdb failed to connect to database: %w", err)
 	}
 
 	defer func() {
@@ -273,7 +273,7 @@ func (d *CockroachDBDriver) Columns(schema, tableName string, whitelist, blackli
 		var defaultValue, arrayType *string
 		var nullable, unique bool
 		if err := rows.Scan(&colName, &ordinalPos, &colType, &defaultValue, &nullable, &unique); err != nil {
-			return nil, errors.Wrapf(err, "unable to scan for table %s", tableName)
+			return nil, fmt.Errorf("unable to scan for table %s: %w", tableName, err)
 		}
 
 		// To prevent marking nullable columns as not having a default value
@@ -325,7 +325,7 @@ WHERE
 
 	row := d.conn.QueryRow(query, tableName, schema)
 	if err = row.Scan(&pkey.Name); err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil
 		}
 		return nil, err
@@ -577,7 +577,6 @@ func (d *CockroachDBDriver) Imports() (importers.Collection, error) {
 				`"strings"`,
 			},
 			ThirdParty: importers.List{
-				`"github.com/pkg/errors"`,
 				`"github.com/spf13/viper"`,
 				`"github.com/volatiletech/randomize"`,
 				`_ "github.com/lib/pq"`,
