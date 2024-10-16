@@ -133,7 +133,7 @@ func (o *{{$alias.UpSingular}}) Upsert({{if .NoContext}}exec boil.Executor{{else
 		{{else -}}
 		err = exec.QueryRowContext(ctx, cache.query, vals...).Scan(returns...)
 		{{end -}}
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			err = nil // CockcorachDB doesn't return anything when there's no update
 		}
 	} else {
@@ -144,7 +144,7 @@ func (o *{{$alias.UpSingular}}) Upsert({{if .NoContext}}exec boil.Executor{{else
 		{{end -}}
 	}
 	if err != nil {
-		return errors.Wrap(err, "{{.PkgName}}: unable to upsert {{.Table.Name}}")
+		return fmt.Errorf("{{.PkgName}}: unable to upsert {{.Table.Name}}: %w", err)
 	}
 
 	if !cached {

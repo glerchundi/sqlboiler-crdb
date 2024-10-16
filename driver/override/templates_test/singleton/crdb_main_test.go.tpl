@@ -53,23 +53,23 @@ func (c *crdbTester) setup() error {
   createCmd.Stdin = newFKeyDestroyer(rgxCDBFkey, r)
 
   if err = dumpCmd.Start(); err != nil {
-      return errors.Wrap(err, "failed to start 'cockroach dump' command")
+      return fmt.Errorf("failed to start 'cockroach dump' command: %w", err)
   }
   if err = createCmd.Start(); err != nil {
-      return errors.Wrap(err, "failed to start 'cockroach sql' command")
+      return fmt.Errorf("failed to start 'cockroach sql' command: %w", err)
   }
 
   if err = dumpCmd.Wait(); err != nil {
-      return errors.Wrap(err, "failed to wait for 'cockroach sql' command")
+      return fmt.Errorf("failed to wait for 'cockroach sql' command: %w", err)
   }
 
   // After dumpCmd is done, close the write end of the pipe
   if err = w.Close(); err != nil {
-      return errors.Wrap(err, "failed to close pipe")
+      return fmt.Errorf("failed to close pipe: %w", err)
   }
 
   if err = createCmd.Wait(); err != nil {
-      return errors.Wrap(err, "failed to wait for 'cockroach sql' command")
+      return fmt.Errorf("failed to wait for 'cockroach sql' command: %w", err)
   }
 
   return nil
