@@ -17,7 +17,7 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/volatiletech/sqlboiler/v4/drivers"
+	"github.com/aarondl/sqlboiler/v4/drivers"
 )
 
 var (

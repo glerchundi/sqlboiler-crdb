@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/aarondl/sqlboiler/v4/drivers"
 	"github.com/glerchundi/sqlboiler-crdb/v4/driver"
-	"github.com/volatiletech/sqlboiler/v4/drivers"
 )
 
 func main() {
