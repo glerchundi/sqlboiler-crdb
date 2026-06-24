@@ -405,6 +405,7 @@ WHERE
     pgn.nspname = $2
     AND pgc.relname = $1
     AND pgcon.contype = 'f'
+    AND array_length(pgcon.conkey, 1) = 1
 ORDER BY
     pgcon.conname DESC;`
 

@@ -3,6 +3,7 @@ drop table if exists video_tags;
 drop table if exists tags;
 drop table if exists videos;
 drop table if exists sponsors;
+drop table if exists comment_replies;
 drop table if exists comments;
 drop table if exists posts;
 drop table if exists users;
@@ -26,6 +27,18 @@ CREATE TABLE comments (
 	content string null,
 
 	primary key (user_id, post_id)
+);
+
+-- comment_replies has a composite FK to comments(user_id, post_id).
+-- The driver intentionally ignores composite FKs; only single-column FKs
+-- are reflected in the generated ORM code (see ForeignKeyInfo).
+create table comment_replies (
+	id serial primary key not null,
+	comment_user_id int not null,
+	comment_post_id int not null,
+	content string null,
+
+	foreign key (comment_user_id, comment_post_id) references comments (user_id, post_id)
 );
 
 create table sponsors (
