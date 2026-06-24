@@ -61,6 +61,78 @@
       "to_many_relationships": null
     },
     {
+      "name": "comment_replies",
+      "schema_name": "",
+      "columns": [
+        {
+          "name": "id",
+          "type": "int64",
+          "db_type": "int8",
+          "default": "unique_rowid()",
+          "nullable": false,
+          "unique": true,
+          "validated": false,
+          "arr_type": null,
+          "udt_name": "",
+          "domain_name": null,
+          "full_db_type": "",
+          "auto_generated": false
+        },
+        {
+          "name": "comment_user_id",
+          "type": "int64",
+          "db_type": "int8",
+          "default": "",
+          "nullable": false,
+          "unique": false,
+          "validated": false,
+          "arr_type": null,
+          "udt_name": "",
+          "domain_name": null,
+          "full_db_type": "",
+          "auto_generated": false
+        },
+        {
+          "name": "comment_post_id",
+          "type": "int64",
+          "db_type": "int8",
+          "default": "",
+          "nullable": false,
+          "unique": false,
+          "validated": false,
+          "arr_type": null,
+          "udt_name": "",
+          "domain_name": null,
+          "full_db_type": "",
+          "auto_generated": false
+        },
+        {
+          "name": "content",
+          "type": "null.String",
+          "db_type": "string",
+          "default": "",
+          "nullable": true,
+          "unique": false,
+          "validated": false,
+          "arr_type": null,
+          "udt_name": "",
+          "domain_name": null,
+          "full_db_type": "",
+          "auto_generated": false
+        }
+      ],
+      "p_key": {
+        "name": "primary",
+        "columns": [
+          "id"
+        ]
+      },
+      "f_keys": null,
+      "is_join_table": false,
+      "to_one_relationships": null,
+      "to_many_relationships": null
+    },
+    {
       "name": "posts",
       "schema_name": "",
       "columns": [
